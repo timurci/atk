@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Protocol
 if TYPE_CHECKING:
     from pydantic import BaseModel
 
-    from atk.message import AssistantMessage, Message
+    from .message import AssistantMessage, Message
 
 
 class LanguageModel(Protocol):
@@ -16,7 +16,7 @@ class LanguageModel(Protocol):
         instruction: str,
         messages: list[Message],
         # tools: list[Tool],
-        response_format: BaseModel | None = None,
+        response_format: type[BaseModel] | None = None,
     ) -> AssistantMessage:
         """Generate response from the given instruction and conversation history.
 
