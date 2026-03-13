@@ -1,5 +1,6 @@
 """OpenAI language model implementation."""
 
+import json
 from typing import TYPE_CHECKING, cast
 
 from openai import AsyncOpenAI, Omit
@@ -7,10 +8,22 @@ from openai.types.chat import (
     ChatCompletionContentPartParam,
     ChatCompletionContentPartTextParam,
     ChatCompletionMessage,
+    ChatCompletionMessageCustomToolCall,
+    ChatCompletionMessageFunctionToolCall,
+    ChatCompletionMessageFunctionToolCallParam,
     ChatCompletionMessageParam,
+    ChatCompletionMessageToolCallUnionParam,
 )
 
-from atk.core.message import AssistantMessage, Message, TextPart, UserMessage
+from atk.core.message import (
+    AssistantMessage,
+    Message,
+    TextPart,
+    ToolCallPart,
+    ToolMessage,
+    ToolResultPart,
+    UserMessage,
+)
 from atk.core.model import LanguageModel
 
 if TYPE_CHECKING:
@@ -37,27 +50,46 @@ class OpenAIMessageMapper:
             {"role": "system", "content": instruction}
         ]
         for msg in messages:
-            if isinstance(msg, (UserMessage, AssistantMessage)):
+            mapped_msg = {}
+            if isinstance(msg, (UserMessage, AssistantMessage, ToolMessage)):
                 role = msg.role
             else:
                 error_msg = f"Unsupported message role: {type(msg)}"
                 raise NotImplementedError(error_msg)
 
-            content: list[ChatCompletionContentPartParam] = []
+            mapped_msg["role"] = role
+
+            content: list[ChatCompletionContentPartParam | str] = []
+            tool_calls: list[ChatCompletionMessageToolCallUnionParam] = []
             for part in msg.content:
-                if isinstance(part, TextPart):
-                    content.append(
-                        ChatCompletionContentPartTextParam(
+                match part:
+                    case TextPart():
+                        mapped_part = ChatCompletionContentPartTextParam(
                             {"type": "text", "text": part.text}
                         )
-                    )
-                else:
-                    error_msg = f"Unsupported content part type: {type(part)}"
-                    raise NotImplementedError(error_msg)
-
-            result.append(
-                cast("ChatCompletionMessageParam", {"role": role, "content": content})
-            )
+                        content.append(mapped_part)
+                    case ToolResultPart():
+                        mapped_part = part.content
+                        mapped_msg["tool_call_id"] = part.tool_call_id
+                    case ToolCallPart():
+                        mapped_call = ChatCompletionMessageFunctionToolCallParam(
+                            {
+                                "type": "function",
+                                "id": part.id,
+                                "function": {
+                                    "name": part.name,
+                                    "arguments": json.dumps(part.arguments),
+                                },
+                            }
+                        )
+                        tool_calls.append(mapped_call)
+                    case _:
+                        error_msg = f"Unsupported content part type: {type(part)}"
+                        raise NotImplementedError(error_msg)
+            mapped_msg["content"] = content
+            if len(tool_calls) > 0:
+                mapped_msg["tool_calls"] = tool_calls
+            result.append(cast("ChatCompletionMessageParam", mapped_msg))
 
         return result
 
@@ -71,17 +103,31 @@ class OpenAIMessageMapper:
         Returns:
             Internal AssistantMessage.
         """
-        content_raw = message.content
+        assistant_content = []
 
-        if content_raw is None:
-            content = []
-        elif isinstance(content_raw, str):
-            content = [TextPart(text=content_raw)]
-        else:
-            error_msg = f"Unsupported content type: {type(content_raw)}"
+        if message.content is not None:
+            assistant_content.append(TextPart(text=message.content))
+
+        if message.tool_calls is not None:
+            for tool_call in message.tool_calls:
+                match tool_call:
+                    case ChatCompletionMessageFunctionToolCall():
+                        assistant_content.append(
+                            ToolCallPart(
+                                id=tool_call.id,
+                                name=tool_call.function.name,
+                                arguments=json.loads(tool_call.function.arguments),
+                            )
+                        )
+                    case ChatCompletionMessageCustomToolCall():
+                        error_msg = "Custom tool calls are not supported yet."
+                        raise NotImplementedError(error_msg)
+
+        if message.audio is not None:
+            error_msg = "Audio output is not supported yet."
             raise NotImplementedError(error_msg)
 
-        return AssistantMessage(content=content)
+        return AssistantMessage(content=assistant_content)
 
 
 class OpenAILanguageModel(LanguageModel):
