@@ -1,0 +1,45 @@
+# .github/workflows/release.yml
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: release # optional: adds a manual approval gate in GitHub UI
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # needed so git-cliff can see full history
+
+      - name: Extract changelog entry for this tag
+        id: changelog
+        uses: orhun/git-cliff-action@v4
+        with:
+          args: --current --strip header # only the current release block, no "# Changelog" header
+        env:
+          OUTPUT: CHANGES.md # temp file, not committed
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: CHANGES.md # uses the extracted changelog entry as the release body
+          tag_name: ${{ github.ref_name }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Build
+        run: |
+          pip install build
+          python -m build
+
+      - name: Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
