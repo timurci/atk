@@ -11,7 +11,7 @@ jobs:
     environment: release # optional: adds a manual approval gate in GitHub UI
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0 # needed so git-cliff can see full history
 
@@ -30,14 +30,16 @@ jobs:
           tag_name: ${{ github.ref_name }}
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.x"
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
       - name: Build
         run: |
-          pip install build
-          python -m build
+          uv build
 
       - name: Publish to TestPyPI
         uses: pypa/gh-action-pypi-publish@release/v1
