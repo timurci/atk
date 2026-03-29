@@ -27,11 +27,19 @@ def _map_parameter(param: ToolParameter) -> dict:
             base["enum"] = list(param.enum)
         case ArrayParameter():
             base["type"] = "array"
+            if param.items is not None:
+                base["items"] = _map_parameter(param.items)
         case ObjectParameter():
             base["type"] = "object"
-            base["properties"] = {
-                k: _map_parameter(v) for k, v in param.properties.items()
-            }
+            match param.properties:
+                case dict():
+                    base["properties"] = {
+                        k: _map_parameter(v) for k, v in param.properties.items()
+                    }
+                case None:
+                    pass
+                case _:
+                    base["additionalProperties"] = _map_parameter(param.properties)
 
     return base
 
