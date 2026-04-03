@@ -4,3 +4,13 @@ ignore = ["COM812"]
 
 [lint.pydocstyle]
 convention = "google"
+
+[lint.per-file-ignores]
+"tests/**" = [
+    "ANN001",  # require type annotations
+    "ANN201",  # require return type annotations
+    "S101",  # prevent usage of assert
+    "D102",  # missing docstring for public function
+    "FBT001",  # boolean positional arg
+    "FBT002",  # boolean default arg
+]
