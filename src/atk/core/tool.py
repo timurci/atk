@@ -9,6 +9,7 @@ from typing import (
     TYPE_CHECKING,
     Annotated,
     Literal,
+    Union,
     get_args,
     get_origin,
     get_type_hints,
@@ -81,7 +82,7 @@ ToolParameter = Annotated[
 def _resolve_optional(annotation: object) -> tuple[object, bool]:
     """Return (inner_type, is_optional) for ``T | None`` annotations."""
     origin = get_origin(annotation)
-    if origin is types.UnionType or origin is type(None).__class__:
+    if origin is types.UnionType or origin is Union:
         args = get_args(annotation)
         if type(None) in args:
             non_none = [a for a in args if a is not type(None)]
@@ -117,6 +118,9 @@ def _map_container_type(
         items = None if not args else _map_type(args[0], "")
         return ArrayParameter(type="array", description=description, items=items)
     if origin is dict:
+        if args and args[0] is not str:
+            msg = f"dict key type must be str, got {args[0]!r}"
+            raise NotImplementedError(msg)
         props = None if not args else _map_type(args[1], "")
         return ObjectParameter(type="object", description=description, properties=props)
     return None
