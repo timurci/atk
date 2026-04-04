@@ -23,6 +23,10 @@ dev = [
     "ruff>=0.15.4",
     "ty>=0.0.20",
 ]
+examples = [
+    { include-group = "openai" },
+    "rich>=14.3.3",
+]
 openai = [
     "openai>=2.26.0",
 ]
