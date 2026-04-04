@@ -45,8 +45,25 @@ class OpenAIMessageMapper:
             {"role": "system", "content": instruction}
         ]
         for msg in messages:
-            mapped_msg = {}
-            if isinstance(msg, (UserMessage, AssistantMessage, ToolMessage)):
+            if isinstance(msg, ToolMessage):
+                for part in msg.content:
+                    if isinstance(part, ToolResultPart):
+                        result.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": part.tool_call_id,
+                                "content": part.content,
+                            }
+                        )
+                    else:
+                        error_msg = (
+                            f"Unsupported ToolMessage content part type: {type(part)}"
+                        )
+                        raise NotImplementedError(error_msg)
+                continue
+
+            mapped_msg: dict[str, object] = {}
+            if isinstance(msg, (UserMessage, AssistantMessage)):
                 role = msg.role
             else:
                 error_msg = f"Unsupported message role: {type(msg)}"
@@ -63,9 +80,6 @@ class OpenAIMessageMapper:
                             {"type": "text", "text": part.text}
                         )
                         content.append(mapped_part)
-                    case ToolResultPart():
-                        mapped_part = part.content
-                        mapped_msg["tool_call_id"] = part.tool_call_id
                     case ToolCallPart():
                         mapped_call = ChatCompletionMessageFunctionToolCallParam(
                             {
