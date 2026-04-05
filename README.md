@@ -77,14 +77,13 @@ tests/             # Unit tests
 ## Examples
 
 See [examples/README.md](examples/README.md) for runnable demos including:
-- Interactive chat loop with tool calling
+- Interactive chat loop with streaming responses and tool calling
 - Structured output with Pydantic models
 
 ## Roadmap
 
 - Language model gateway — instantiate models via string identifiers (e.g. `model="openai:gpt-5.4"`, `model="hf:google/gemma-4-26B-A4B-it:Q4"`) without vendor-specific imports
 - Multimodal input support
-- Streaming responses
 - HuggingFace Transformers implementation
 
 ## Requirements
