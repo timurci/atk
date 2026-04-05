@@ -10,7 +10,7 @@ uv sync --group examples
 
 ## Chat with Tools
 
-Interactive chat loop with tool calling support. The assistant can call tools like `calculate`, `search_path`, and `read_file` to answer questions.
+Interactive chat loop with streaming responses and tool calling support. The assistant can call tools like `calculate`, `search_path`, and `read_file` to answer questions. Responses are rendered in real-time using Rich Live display.
 
 ```bash
 cd examples/
@@ -21,6 +21,7 @@ uv run -m chat.main
 - Type a message and press Enter to send it to the assistant.
 - Type `exit` or `quit` to end the session.
 - Tool calls and results are displayed in styled panels.
+- Text responses stream token-by-token with live updating.
 
 **CLI options:**
 - `--base-url` — API base URL (default: `http://localhost:8080/v1`)
