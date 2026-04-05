@@ -53,3 +53,33 @@ class ToolMessage(BaseModel):
 Message = Annotated[
     UserMessage | AssistantMessage | ToolMessage, Field(discriminator="role")
 ]
+
+
+class TextDelta(BaseModel):
+    """Incremental text chunk from a streaming response."""
+
+    type: Literal["text_delta"] = "text_delta"
+    text: str
+
+
+class ToolCallDelta(BaseModel):
+    """Incremental tool call chunk from a streaming response.
+
+    ``arguments_delta`` is a raw JSON string fragment (not a parsed dict).
+    """
+
+    type: Literal["tool_call_delta"] = "tool_call_delta"
+    id: str
+    name: str
+    arguments_delta: str
+
+
+class AssistantStream(BaseModel):
+    """A single chunk from a streaming assistant response.
+
+    Yields incrementally during ``stream_response``. The final
+    yield is an ``AssistantMessage`` with the fully accumulated content.
+    """
+
+    role: Literal["assistant_stream"] = "assistant_stream"
+    content: list[Annotated[TextDelta | ToolCallDelta, Field(discriminator="type")]]
