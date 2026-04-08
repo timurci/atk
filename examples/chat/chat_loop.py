@@ -13,6 +13,7 @@ from atk.core.message import (
     Message,
     TextDelta,
     TextPart,
+    ThinkingDelta,
     ToolCallDelta,
     ToolCallPart,
     ToolMessage,
@@ -21,6 +22,7 @@ from atk.core.message import (
 )
 
 from .display import (
+    build_thinking_panel,
     build_tool_call_panel,
     display_tool_response,
 )
@@ -36,10 +38,14 @@ class _StreamState:
     """Tracks accumulated state during a streaming turn."""
 
     def __init__(self) -> None:
+        self.thinking: list[str] = []
         self.text: list[str] = []
         self.tool_call_ids: set[str] = set()
         self.tool_call_names: dict[str, str] = {}
         self.tool_call_args: dict[str, str] = {}
+
+    def add_thinking(self, thinking: str) -> None:
+        self.thinking.append(thinking)
 
     def add_text(self, text: str) -> None:
         self.text.append(text)
@@ -53,6 +59,10 @@ class _StreamState:
 
     def build_group(self) -> Group:
         renderables: list[Panel] = []
+        if self.thinking:
+            renderables.append(
+                build_thinking_panel("".join(self.thinking)),
+            )
         renderables.append(
             Panel(
                 "".join(self.text) or "…",
@@ -108,6 +118,8 @@ async def _stream_turn(
                 case AssistantStream():
                     for delta in chunk.content:
                         match delta:
+                            case ThinkingDelta():
+                                state.add_thinking(delta.thinking)
                             case TextDelta():
                                 state.add_text(delta.text)
                             case ToolCallDelta():
