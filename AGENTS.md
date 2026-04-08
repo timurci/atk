@@ -7,7 +7,7 @@
 
 ## Project Overview
 
-`atk` (Agent Toolkit) is a Python library that provides a unified, vendor-agnostic interface for building AI agent systems. The core package (`atk.core`) defines abstract protocols for language models, message schemas, and tool definitions — designed to be importable by anyone building their own agent harness. Vendor integrations (e.g. `atk.openai`) are secondary modules that implement the core protocol. The project is structured as an extensible toolkit, with planned future modules for tools (`atk.tools`) and a proper agent harness.
+`atk` (Agent Toolkit) is a Python library that provides a unified, vendor-agnostic interface for building AI agent systems. The core package (`atk.core`) defines abstract protocols for language models, message schemas, and tool definitions — designed to be importable by anyone building their own agent harness. Provider integrations (e.g. `atk.providers`) are secondary modules that implement the core protocol using third-party SDKs. The project is structured as an extensible toolkit, with planned future modules for tools (`atk.tools`) and a proper agent harness.
 
 ---
 
@@ -22,7 +22,7 @@
 - **Testing**: `pytest`
 - **Key libraries**:
   - `pydantic` — data models and validation (core dependency)
-  - `openai` — OpenAI SDK (optional, in `[dependency-groups.openai]`)
+  - `any-llm-sdk` — unified LLM provider interface (optional, in `[dependency-groups.providers]`)
 
 ---
 
@@ -34,10 +34,10 @@
 uv sync
 ```
 
-### Install with optional OpenAI support
+### Install with optional provider support
 
 ```bash
-uv sync --group openai
+uv sync --group providers
 ```
 
 ### Run tests
@@ -104,26 +104,37 @@ atk/
 │       │   ├── __init__.py
 │       │   ├── model.py        # LanguageModel protocol (async interface)
 │       │   ├── message.py      # Message schemas (User/Assistant/Tool messages)
-│       │   └── tool.py         # Tool schema and parameter types
-│       └── openai/             # OpenAI SDK implementation
+│       │   ├── tool.py         # Tool schema and parameter types
+│       │   └── toolset.py      # CallableToolset — invoke tools from Tool definitions
+│       └── providers/          # any-llm integration (3rd-party adapter)
 │           ├── __init__.py
-│           ├── model.py        # OpenAILanguageModel implements LanguageModel
-│           ├── message.py      # OpenAIMessageMapper — bidirectional mapping
-│           └── tool.py         # OpenAIToolMapper — internal → OpenAI schema
+│           ├── model.py        # AnyLanguageModel implements LanguageModel
+│           ├── message.py      # MessageMapper — bidirectional mapping
+│           └── tool.py         # ToolMapper — internal → any-llm tool schema
 │
 ├── tests/
 │   ├── __init__.py
 │   └── unit/
 │       ├── __init__.py
-│       └── core/
+│       ├── core/
+│       │   ├── __init__.py
+│       │   ├── conftest.py     # Shared fixtures
+│       │   ├── test_tool_from_callable.py
+│       │   └── tool.py         # Test fixtures / helpers
+│       └── providers/
 │           ├── __init__.py
-│           ├── conftest.py     # Shared fixtures
-│           ├── test_tool_from_callable.py
-│           └── tool.py         # Test fixtures / helpers
+│           ├── test_message_mapper.py
+│           └── test_stream_accumulator.py
 │
 ├── examples/
 │   ├── __init__.py
-│   └── openai/                 # OpenAI usage examples
+│   ├── structured.py           # Structured output example
+│   └── chat/                   # Interactive chat example
+│       ├── __init__.py
+│       ├── main.py
+│       ├── chat_loop.py
+│       ├── display.py
+│       └── tools.py
 │
 └── docs/                       # Documentation
 ```
@@ -135,7 +146,7 @@ atk/
 `atk` has two explicit layers. Maintain this boundary strictly:
 
 ```
-Vendor implementations (atk.openai, future: atk.anthropic, etc.)
+Provider integrations (atk.providers)
     │  implement
     ▼
 Core protocol (atk.core)
@@ -144,13 +155,13 @@ Core protocol (atk.core)
 Pydantic models & types (message.py, tool.py)
 ```
 
-- **Core layer** (`atk.core/`): Defines the `LanguageModel` protocol, message types (`UserMessage`, `AssistantMessage`, `ToolMessage`), and tool parameter schemas. This is the library surface — anyone should be able to import `atk.core` and build their own agent system without any vendor dependency. Keep it clean, abstract, and free of vendor-specific code.
-- **Vendor layer** (`atk.openai/` and future modules): Implements the core protocol for a specific provider. Contains mappers that translate between internal types and vendor SDK types. Each vendor module is independent — do not share state or imports between vendor modules except through `atk.core`.
+- **Core layer** (`atk.core/`): Defines the `LanguageModel` protocol, message types (`UserMessage`, `AssistantMessage`, `ToolMessage`), and tool parameter schemas. This is the library surface — anyone should be able to import `atk.core` and build their own agent system without any provider dependency. Keep it clean, abstract, and free of provider-specific code.
+- **Provider layer** (`atk.providers/`): A **third-party integration adapter** that implements the core protocol using the `any-llm-sdk` library. Contains mappers that translate between internal types and any-llm SDK types. This module is independent and should not be imported by other vendor modules except through `atk.core`. Because it depends on `any-llm-sdk`, it delegates provider selection to any-llm (which uses official provider SDKs under the hood).
 
 **Design principles:**
 - **YAGNI**: Do not add plugin systems, registries, or abstract base classes unless a concrete second implementation exists or is explicitly required.
 - **KISS**: Prefer plain functions and Pydantic models over class hierarchies. Introduce abstractions only when duplication is clear and justified.
-- **Core-first**: `atk.core` is the primary artifact. Vendor modules are implementations of its contracts, not peers.
+- **Core-first**: `atk.core` is the primary artifact. Provider modules are implementations of its contracts, not peers.
 
 ---
 
@@ -170,15 +181,14 @@ Pydantic models & types (message.py, tool.py)
 ### Error handling
 - Raise `NotImplementedError` with a descriptive message for unimplemented methods or unsupported cases.
 - Never raise bare `Exception` or `ValueError` — use specific exception types or `NotImplementedError`.
-- Vendor modules should raise `NotImplementedError` for unsupported features (e.g. audio output, custom tool calls) with a clear message.
+- Provider modules should raise `NotImplementedError` for unsupported features (e.g. audio output, custom tool calls) with a clear message.
 
 ### Imports
 - Import order: stdlib → third-party → internal (ruff enforces this).
 - Never use wildcard imports.
-- Vendor modules must import from `atk.core`, never from other vendor modules.
 
 ### Async design
-- The `LanguageModel` protocol is async-only (`async def generate_response`). All vendor implementations must follow this pattern. Do not add synchronous implementations.
+- The `LanguageModel` protocol is async-only (`async def generate_response`). All provider implementations must follow this pattern. Do not add synchronous implementations.
 
 ---
 
@@ -196,17 +206,18 @@ Pydantic models & types (message.py, tool.py)
 
 - **Do not** add dependencies without `uv add [package]` (updates `pyproject.toml` and lockfile).
 - **Do not** use `pip install` directly.
-- **Do not** put vendor-specific code in `atk.core/` — it must remain provider-agnostic.
-- **Do not** import from one vendor module into another (e.g. `atk.openai` must not import from a future `atk.anthropic`).
+- **Do not** put provider-specific code in `atk.core/` — it must remain provider-agnostic.
+- **Do not** import from one provider module into another.
 - **Do not** add synchronous implementations of `LanguageModel` — the protocol is async-only.
 - **Do not** suppress type errors with `# type: ignore` without an explanatory comment.
 - **Do not** edit `ruff.toml` or add `# noqa` suppressions without a comment explaining the exception.
-- **Do not** introduce plugin systems or registries unless a concrete second vendor implementation exists.
+- **Do not** introduce plugin systems or registries unless a concrete second provider implementation exists.
 
 ---
 
 ## Known Gotchas
 
 - Python `3.14+` is required — do not use syntax or features unavailable in this version.
-- The `openai` dependency is optional (in `[dependency-groups.openai]`). Code in `atk.openai/` will fail to import without it — this is intentional.
+- The `any-llm-sdk` dependency is optional (in `[dependency-groups.providers]`). Code in `atk.providers/` will fail to import without it — this is intentional.
 - Ruff is configured with `select = ["ALL"]` and only ignores `COM812` globally. Per-file ignores for `tests/**` disable annotation requirements, assert bans, and docstring requirements.
+- `atk.providers` uses `any-llm-sdk` which re-exports OpenAI SDK types. The `openai` package is a transitive dependency — do not import it directly in `atk.providers`; always use `any_llm.types.completion` or construct dicts for message format.

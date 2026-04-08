@@ -50,7 +50,6 @@ class AssistantMessage(BaseModel):
     content: list[
         Annotated[TextPart | ToolCallPart | ThinkingPart, Field(discriminator="type")]
     ]
-    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class ToolMessage(BaseModel):
@@ -104,4 +103,3 @@ class AssistantStream(BaseModel):
             TextDelta | ToolCallDelta | ThinkingDelta, Field(discriminator="type")
         ]
     ]
-    metadata: dict[str, Any] = Field(default_factory=dict)

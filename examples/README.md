@@ -1,12 +1,22 @@
 # Examples
 
-All examples use the OpenAI language model and require an OpenAI-compatible API endpoint.
+All examples use the any-llm provider integration and require an LLM provider API key.
 
 ## Prerequisites
 
 ```bash
 uv sync --group examples
 ```
+
+Set the appropriate environment variable for your chosen provider, e.g.:
+
+```bash
+export OPENAI_API_KEY="your-key-here"
+# or
+export ANTHROPIC_API_KEY="your-key-here"
+```
+
+Alternatively, pass `--api-key` as a CLI argument.
 
 ## Chat with Tools
 
@@ -24,9 +34,10 @@ uv run -m chat.main
 - Text responses stream token-by-token with live updating.
 
 **CLI options:**
-- `--base-url` — API base URL (default: `http://localhost:8080/v1`)
-- `--api-key` — API key (default: empty)
-- `--model` — Model name (default: `gpt-4o-mini`, ignored in local setup)
+- `--provider` — LLM provider identifier (default: `openai`)
+- `--model` — Model name (provider default if omitted)
+- `--api-key` — API key (falls back to environment variable if omitted)
+- `--api-base` — Base URL for the provider API
 
 ## Structured Output
 
@@ -43,6 +54,7 @@ uv run -m structured
 - The program prints the response and exits.
 
 **CLI options:**
-- `--base-url` — API base URL (default: `http://localhost:8080/v1`)
-- `--api-key` — API key (default: empty)
-- `--model` — Model name (default: `gpt-4o-mini`, ignored in local setup)
+- `--provider` — LLM provider identifier (default: `openai`)
+- `--model` — Model name (provider default if omitted)
+- `--api-key` — API key (falls back to environment variable if omitted)
+- `--api-base` — Base URL for the provider API

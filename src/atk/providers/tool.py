@@ -1,6 +1,6 @@
-"""Maps between internal tools and OpenAI tool schema."""
+"""Maps between internal tools and any-llm tool schema."""
 
-from typing import TYPE_CHECKING
+from typing import Any
 
 from atk.core.tool import (
     ArrayParameter,
@@ -11,13 +11,10 @@ from atk.core.tool import (
     ToolParameter,
 )
 
-if TYPE_CHECKING:
-    from openai.types.chat import ChatCompletionFunctionToolParam
 
-
-def _map_parameter(param: ToolParameter) -> dict:
+def _map_parameter(param: ToolParameter) -> dict[str, Any]:
     """Map a single ToolParameter to JSON schema property."""
-    base: dict = {"description": param.description}
+    base: dict[str, Any] = {"description": param.description}
 
     match param:
         case PrimitiveParameter():
@@ -44,25 +41,23 @@ def _map_parameter(param: ToolParameter) -> dict:
     return base
 
 
-class OpenAIToolMapper:
-    """Maps between internal tools and OpenAI tool schema."""
+class ToolMapper:
+    """Maps between internal tools and any-llm tool format."""
 
     @staticmethod
-    def to_openai(
-        tools: list[Tool],
-    ) -> list[ChatCompletionFunctionToolParam]:
-        """Maps a list of tools to OpenAI function tool params.
+    def to_tools(tools: list[Tool]) -> list[dict[str, Any]]:
+        """Maps a list of tools to any-llm function tool format.
 
         Args:
             tools: List of internal Tool definitions.
 
         Returns:
-            List of OpenAI-compatible function tool parameters.
+            List of tool dictionaries compatible with any-llm's completion API.
         """
-        result: list[ChatCompletionFunctionToolParam] = []
+        result: list[dict[str, Any]] = []
 
         for tool in tools:
-            function_schema: dict = {
+            function_schema: dict[str, Any] = {
                 "type": "object",
                 "properties": {
                     name: _map_parameter(param)

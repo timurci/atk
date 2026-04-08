@@ -9,8 +9,10 @@ convention = "google"
 "tests/**" = [
     "ANN001",  # require type annotations
     "ANN201",  # require return type annotations
-    "S101",  # prevent usage of assert
-    "D102",  # missing docstring for public function
+    "ANN205",  # require return type annotations for staticmethod
+    "S101",    # prevent usage of assert
+    "D102",    # missing docstring for public function
     "FBT001",  # boolean positional arg
     "FBT002",  # boolean default arg
+    "PLR2004", # magic value comparison
 ]

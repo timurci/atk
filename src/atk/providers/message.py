@@ -1,17 +1,13 @@
-"""OpenAI message mapper."""
+"""Message mapper for any-llm completions API."""
 
 import json
-from typing import cast
+from typing import Any
 
-from openai.types.chat import (
-    ChatCompletionContentPartParam,
-    ChatCompletionContentPartTextParam,
+from any_llm.types.completion import (
     ChatCompletionMessage,
-    ChatCompletionMessageCustomToolCall,
     ChatCompletionMessageFunctionToolCall,
-    ChatCompletionMessageFunctionToolCallParam,
-    ChatCompletionMessageParam,
-    ChatCompletionMessageToolCallUnionParam,
+    Function,
+    Reasoning,
 )
 
 from atk.core.message import (
@@ -26,84 +22,105 @@ from atk.core.message import (
 )
 
 
-class OpenAIMessageMapper:
-    """Maps between internal message types and OpenAI message formats."""
+class MessageMapper:
+    """Maps between internal message types and any-llm message formats."""
 
     @staticmethod
     def _map_assistant_message(
         msg: AssistantMessage,
-    ) -> ChatCompletionMessageParam:
-        """Map an AssistantMessage to an OpenAI message parameter."""
-        mapped_msg: dict[str, object] = {"role": msg.role}
-        content: list[ChatCompletionContentPartParam | str] = []
-        tool_calls: list[ChatCompletionMessageToolCallUnionParam] = []
+    ) -> ChatCompletionMessage | dict[str, Any]:
+        """Map an AssistantMessage to an any-llm message parameter.
+
+        Returns a ChatCompletionMessage when thinking is present
+        (since it supports the reasoning field), otherwise a dict
+        for simplicity.
+        """
         thinking_parts: list[str] = []
+        text_parts: list[str] = []
+        tool_calls: list[dict[str, Any]] = []
         for part in msg.content:
             match part:
                 case TextPart():
-                    content.append(
-                        ChatCompletionContentPartTextParam(
-                            {"type": "text", "text": part.text}
-                        )
-                    )
+                    text_parts.append(part.text)
                 case ToolCallPart():
                     tool_calls.append(
-                        ChatCompletionMessageFunctionToolCallParam(
-                            {
-                                "type": "function",
-                                "id": part.id,
-                                "function": {
-                                    "name": part.name,
-                                    "arguments": json.dumps(part.arguments),
-                                },
-                            }
-                        )
+                        {
+                            "type": "function",
+                            "id": part.id,
+                            "function": {
+                                "name": part.name,
+                                "arguments": json.dumps(part.arguments),
+                            },
+                        }
                     )
                 case ThinkingPart():
                     thinking_parts.append(part.thinking)
                 case _:
                     error_msg = f"Unsupported content part type: {type(part)}"
                     raise NotImplementedError(error_msg)
-        mapped_msg["content"] = content
+
+        content = " ".join(text_parts) if text_parts else None
+        reasoning = (
+            Reasoning(content="".join(thinking_parts)) if thinking_parts else None
+        )
+
         if tool_calls:
-            mapped_msg["tool_calls"] = tool_calls
-        if thinking_parts:
-            mapped_msg["reasoning_content"] = "".join(thinking_parts)
-        return cast("ChatCompletionMessageParam", mapped_msg)
+            mapped_tool_calls = [
+                ChatCompletionMessageFunctionToolCall(
+                    id=tc["id"],
+                    function=Function(
+                        name=tc["function"]["name"],
+                        arguments=tc["function"]["arguments"],
+                    ),
+                    type="function",
+                )
+                for tc in tool_calls
+            ]
+            return ChatCompletionMessage(
+                content=content,
+                reasoning=reasoning,
+                tool_calls=mapped_tool_calls,
+                role="assistant",
+            )
+
+        if reasoning is not None:
+            return ChatCompletionMessage(
+                content=content,
+                reasoning=reasoning,
+                role="assistant",
+            )
+
+        return {"role": "assistant", "content": content}
 
     @staticmethod
-    def _map_user_message(msg: UserMessage) -> ChatCompletionMessageParam:
-        """Map a UserMessage to an OpenAI message parameter."""
-        content: list[ChatCompletionContentPartParam | str] = []
+    def _map_user_message(msg: UserMessage) -> dict[str, Any]:
+        """Map a UserMessage to an any-llm message parameter."""
+        content: list[dict[str, Any]] | str = []
         for part in msg.content:
             match part:
                 case TextPart():
-                    content.append(
-                        ChatCompletionContentPartTextParam(
-                            {"type": "text", "text": part.text}
-                        )
-                    )
+                    content.append({"type": "text", "text": part.text})
                 case _:
                     error_msg = f"Unsupported content part type: {type(part)}"
                     raise NotImplementedError(error_msg)
-        return cast(
-            "ChatCompletionMessageParam", {"role": msg.role, "content": content}
-        )
+        if len(content) == 1:
+            return {"role": "user", "content": content[0]["text"]}
+        return {"role": "user", "content": content}
 
     @staticmethod
-    def to_openai(
+    def to_messages(
         instruction: str, messages: list[Message]
-    ) -> list[ChatCompletionMessageParam]:
-        """Convert internal messages to OpenAI message format.
+    ) -> list[dict[str, Any] | ChatCompletionMessage]:
+        """Convert internal messages to any-llm message format.
 
         Args:
             instruction: System instruction to prepend.
             messages: Internal message list.
 
         Returns:
-            List of OpenAI-compatible message parameters.
+            List of message parameters for any-llm's completion API.
         """
-        result: list[ChatCompletionMessageParam] = [
+        result: list[dict[str, Any] | ChatCompletionMessage] = [
             {"role": "system", "content": instruction}
         ]
         for msg in messages:
@@ -125,9 +142,9 @@ class OpenAIMessageMapper:
                 continue
 
             if isinstance(msg, AssistantMessage):
-                result.append(OpenAIMessageMapper._map_assistant_message(msg))
+                result.append(MessageMapper._map_assistant_message(msg))
             elif isinstance(msg, UserMessage):
-                result.append(OpenAIMessageMapper._map_user_message(msg))
+                result.append(MessageMapper._map_user_message(msg))
             else:
                 error_msg = f"Unsupported message role: {type(msg)}"
                 raise NotImplementedError(error_msg)
@@ -135,20 +152,19 @@ class OpenAIMessageMapper:
         return result
 
     @staticmethod
-    def from_openai(message: ChatCompletionMessage) -> AssistantMessage:
-        """Convert OpenAI message to internal AssistantMessage format.
+    def from_completion(message: ChatCompletionMessage) -> AssistantMessage:
+        """Convert an any-llm ChatCompletionMessage to internal AssistantMessage.
 
         Args:
-            message: OpenAI chat completion message.
+            message: Completion message from any-llm.
 
         Returns:
             Internal AssistantMessage.
         """
         assistant_content = []
 
-        reasoning_content: str | None = getattr(message, "reasoning_content", None)
-        if reasoning_content:
-            assistant_content.append(ThinkingPart(thinking=reasoning_content))
+        if message.reasoning is not None:
+            assistant_content.append(ThinkingPart(thinking=message.reasoning.content))
 
         if message.content is not None:
             assistant_content.append(TextPart(text=message.content))
@@ -164,7 +180,7 @@ class OpenAIMessageMapper:
                                 arguments=json.loads(tool_call.function.arguments),
                             )
                         )
-                    case ChatCompletionMessageCustomToolCall():
+                    case _:
                         error_msg = "Custom tool calls are not supported yet."
                         raise NotImplementedError(error_msg)
 

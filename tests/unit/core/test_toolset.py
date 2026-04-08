@@ -85,7 +85,7 @@ class TestCallableToolsetTools:
     def test_tools_returns_list_of_tool(self, sync_toolset):
         tools = sync_toolset.tools
         assert isinstance(tools, list)
-        assert len(tools) == 2  # noqa: PLR2004
+        assert len(tools) == 2
         for t in tools:
             assert isinstance(t, Tool)
 
