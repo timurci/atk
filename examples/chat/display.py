@@ -44,6 +44,15 @@ def build_tool_call_panel(name: str, call_id: str, raw_args: str) -> Panel:
     )
 
 
+def build_thinking_panel(thinking: str) -> Panel:
+    """Build a panel for thinking/reasoning content."""
+    return Panel(
+        thinking or "…",
+        title="[magenta]Thinking[/magenta]",
+        border_style="magenta",
+    )
+
+
 def display_tool_response(tool_message: ToolMessage) -> None:
     """Print tool result parts to the console."""
     console = get_console()
