@@ -11,6 +11,8 @@ from atk.core.message import (
     Message,
     TextDelta,
     TextPart,
+    ThinkingDelta,
+    ThinkingPart,
     ToolCallDelta,
     ToolCallPart,
 )
@@ -39,6 +41,7 @@ class _StreamAccumulator:
 
     def __init__(self) -> None:
         self.accumulated_text: list[str] = []
+        self.accumulated_reasoning: list[str] = []
         # Maps OpenAI tool call index (from ``delta.tool_calls[].index``)
         # to the unique call ID string.  Only set once, on the first chunk.
         self.tool_call_ids: dict[int, str] = {}
@@ -51,14 +54,19 @@ class _StreamAccumulator:
 
     def process_chunk(
         self, chunk: ChatCompletionChunk
-    ) -> list[TextDelta | ToolCallDelta]:
+    ) -> list[TextDelta | ToolCallDelta | ThinkingDelta]:
         """Process a single chunk and return mapped delta events."""
         delta = chunk.choices[0].delta
-        events: list[TextDelta | ToolCallDelta] = []
+        events: list[TextDelta | ToolCallDelta | ThinkingDelta] = []
 
         if delta.content is not None:
             self.accumulated_text.append(delta.content)
             events.append(TextDelta(text=delta.content))
+
+        reasoning_content: str | None = getattr(delta, "reasoning_content", None)
+        if reasoning_content:
+            self.accumulated_reasoning.append(reasoning_content)
+            events.append(ThinkingDelta(thinking=reasoning_content))
 
         if delta.tool_calls is not None:
             for tc in delta.tool_calls:
@@ -83,7 +91,9 @@ class _StreamAccumulator:
 
     def build_message(self) -> AssistantMessage:
         """Build the final accumulated AssistantMessage."""
-        content: list[TextPart | ToolCallPart] = []
+        content: list[TextPart | ToolCallPart | ThinkingPart] = []
+        if self.accumulated_reasoning:
+            content.append(ThinkingPart(thinking="".join(self.accumulated_reasoning)))
         if self.accumulated_text:
             content.append(TextPart(text="".join(self.accumulated_text)))
         content.extend(
