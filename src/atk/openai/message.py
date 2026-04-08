@@ -18,6 +18,7 @@ from atk.core.message import (
     AssistantMessage,
     Message,
     TextPart,
+    ThinkingPart,
     ToolCallPart,
     ToolMessage,
     ToolResultPart,
@@ -27,6 +28,67 @@ from atk.core.message import (
 
 class OpenAIMessageMapper:
     """Maps between internal message types and OpenAI message formats."""
+
+    @staticmethod
+    def _map_assistant_message(
+        msg: AssistantMessage,
+    ) -> ChatCompletionMessageParam:
+        """Map an AssistantMessage to an OpenAI message parameter."""
+        mapped_msg: dict[str, object] = {"role": msg.role}
+        content: list[ChatCompletionContentPartParam | str] = []
+        tool_calls: list[ChatCompletionMessageToolCallUnionParam] = []
+        thinking_parts: list[str] = []
+        for part in msg.content:
+            match part:
+                case TextPart():
+                    content.append(
+                        ChatCompletionContentPartTextParam(
+                            {"type": "text", "text": part.text}
+                        )
+                    )
+                case ToolCallPart():
+                    tool_calls.append(
+                        ChatCompletionMessageFunctionToolCallParam(
+                            {
+                                "type": "function",
+                                "id": part.id,
+                                "function": {
+                                    "name": part.name,
+                                    "arguments": json.dumps(part.arguments),
+                                },
+                            }
+                        )
+                    )
+                case ThinkingPart():
+                    thinking_parts.append(part.thinking)
+                case _:
+                    error_msg = f"Unsupported content part type: {type(part)}"
+                    raise NotImplementedError(error_msg)
+        mapped_msg["content"] = content
+        if tool_calls:
+            mapped_msg["tool_calls"] = tool_calls
+        if thinking_parts:
+            mapped_msg["reasoning_content"] = "".join(thinking_parts)
+        return cast("ChatCompletionMessageParam", mapped_msg)
+
+    @staticmethod
+    def _map_user_message(msg: UserMessage) -> ChatCompletionMessageParam:
+        """Map a UserMessage to an OpenAI message parameter."""
+        content: list[ChatCompletionContentPartParam | str] = []
+        for part in msg.content:
+            match part:
+                case TextPart():
+                    content.append(
+                        ChatCompletionContentPartTextParam(
+                            {"type": "text", "text": part.text}
+                        )
+                    )
+                case _:
+                    error_msg = f"Unsupported content part type: {type(part)}"
+                    raise NotImplementedError(error_msg)
+        return cast(
+            "ChatCompletionMessageParam", {"role": msg.role, "content": content}
+        )
 
     @staticmethod
     def to_openai(
@@ -62,43 +124,13 @@ class OpenAIMessageMapper:
                         raise NotImplementedError(error_msg)
                 continue
 
-            mapped_msg: dict[str, object] = {}
-            if isinstance(msg, (UserMessage, AssistantMessage)):
-                role = msg.role
+            if isinstance(msg, AssistantMessage):
+                result.append(OpenAIMessageMapper._map_assistant_message(msg))
+            elif isinstance(msg, UserMessage):
+                result.append(OpenAIMessageMapper._map_user_message(msg))
             else:
                 error_msg = f"Unsupported message role: {type(msg)}"
                 raise NotImplementedError(error_msg)
-
-            mapped_msg["role"] = role
-
-            content: list[ChatCompletionContentPartParam | str] = []
-            tool_calls: list[ChatCompletionMessageToolCallUnionParam] = []
-            for part in msg.content:
-                match part:
-                    case TextPart():
-                        mapped_part = ChatCompletionContentPartTextParam(
-                            {"type": "text", "text": part.text}
-                        )
-                        content.append(mapped_part)
-                    case ToolCallPart():
-                        mapped_call = ChatCompletionMessageFunctionToolCallParam(
-                            {
-                                "type": "function",
-                                "id": part.id,
-                                "function": {
-                                    "name": part.name,
-                                    "arguments": json.dumps(part.arguments),
-                                },
-                            }
-                        )
-                        tool_calls.append(mapped_call)
-                    case _:
-                        error_msg = f"Unsupported content part type: {type(part)}"
-                        raise NotImplementedError(error_msg)
-            mapped_msg["content"] = content
-            if len(tool_calls) > 0:
-                mapped_msg["tool_calls"] = tool_calls
-            result.append(cast("ChatCompletionMessageParam", mapped_msg))
 
         return result
 
@@ -113,6 +145,10 @@ class OpenAIMessageMapper:
             Internal AssistantMessage.
         """
         assistant_content = []
+
+        reasoning_content: str | None = getattr(message, "reasoning_content", None)
+        if reasoning_content:
+            assistant_content.append(ThinkingPart(thinking=reasoning_content))
 
         if message.content is not None:
             assistant_content.append(TextPart(text=message.content))
