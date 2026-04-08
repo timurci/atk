@@ -1,4 +1,4 @@
-"""OpenAI-compatible chat loop example with optional tool support."""
+"""Chat loop example using any-llm provider integration."""
 
 import argparse
 import asyncio
@@ -14,48 +14,60 @@ from chat.tools import (  # ty: ignore[unresolved-import]
 from rich.console import Console
 
 from atk.core.toolset import CallableToolset
-from atk.openai.model import OpenAILanguageModel
+from atk.providers.model import AnyLanguageModel
 
 console = Console()
 
 
 class CLIArgs(TypedDict):
-    """CLI arguments for OpenAI-compatible endpoints."""
+    """CLI arguments for provider configuration."""
 
-    base_url: str
-    api_key: str
+    provider: str
     model: str | None
+    api_key: str | None
+    api_base: str | None
 
 
 def parse_args() -> CLIArgs:
-    """Parse CLI arguments for OpenAI-compatible endpoints."""
-    parser = argparse.ArgumentParser(description="OpenAI-compatible chat")
+    """Parse CLI arguments for provider configuration."""
+    parser = argparse.ArgumentParser(description="Chat with an LLM provider")
     parser.add_argument(
-        "--base-url",
-        default="http://localhost:8080/v1",
-        help="Base URL for OpenAI-compatible API (default: http://localhost:8080/v1)",
-    )
-    parser.add_argument(
-        "--api-key",
-        default="",
-        help="API key for the API (default: empty)",
+        "--provider",
+        default="openai",
+        help="LLM provider identifier (default: openai)",
     )
     parser.add_argument(
         "--model",
         default=None,
-        help="Optional model name",
+        help="Model name to use (provider default if omitted)",
+    )
+    parser.add_argument(
+        "--api-key",
+        default=None,
+        help="API key (falls back to environment variable)",
+    )
+    parser.add_argument(
+        "--api-base",
+        default=None,
+        help="Base URL for the provider API",
     )
     args = parser.parse_args()
-    return CLIArgs(base_url=args.base_url, api_key=args.api_key, model=args.model)
+    return CLIArgs(
+        provider=args.provider,
+        model=args.model,
+        api_key=args.api_key,
+        api_base=args.api_base,
+    )
 
 
 def main() -> None:
     """Run streaming chat loop with tool definitions."""
     args = parse_args()
-    llm = OpenAILanguageModel(
-        base_url=args["base_url"],
-        api_key=args["api_key"],
+    llm = AnyLanguageModel(
+        provider=args["provider"],
         model=args["model"],
+        api_key=args["api_key"],
+        api_base=args["api_base"],
     )
     toolset = CallableToolset([calculate, search_path, read_file])
     instruction = "You are a helpful assistant that can use tools to help users."

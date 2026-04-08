@@ -7,12 +7,13 @@ A Python library that provides a unified, vendor-agnostic interface for building
 
 ## Overview
 
-`atk` defines abstract protocols for language models, message schemas, and tool definitions — designed to be importable by anyone building their own agent harness. Vendor integrations (e.g. `atk.openai`) are secondary modules that implement the core protocol.
+`atk` defines abstract protocols for language models, message schemas, and tool definitions — designed to be importable by anyone building their own agent harness. Provider integrations (e.g. `atk.providers`) are secondary modules that implement the core protocol via the any-llm SDK.
 
 ## Features
 
-- **Core-first design**: `atk.core` defines the `LanguageModel` protocol, message types, and tool schemas — completely free of vendor dependencies
-- **Vendor implementations**: Pluggable modules (currently OpenAI) that implement the core protocol
+- **Core-first design**: `atk.core` defines the `LanguageModel` protocol, message types, and tool schemas — completely free of provider dependencies
+- **Provider integration**: `atk.providers` uses any-llm to support multiple LLM backends through a single module
+- **Thinking/reasoning support**: Native `ThinkingPart` and `ThinkingDelta` types for models that produce reasoning tokens
 - **Toolset abstraction**: Register callables as tools with automatic parameter extraction from type hints and docstrings
 - **Async-native**: The entire `LanguageModel` protocol is async-only
 - **Pydantic-based**: All schemas use Pydantic for validation and serialization
@@ -23,17 +24,17 @@ A Python library that provides a unified, vendor-agnostic interface for building
 uv sync
 ```
 
-### With OpenAI support
+### With provider support
 
 ```bash
-uv sync --group openai
+uv sync --group providers
 ```
 
 ## Usage
 
 ```python
 from atk.core.toolset import CallableToolset
-from atk.openai.model import OpenAILanguageModel
+from atk.providers.model import AnyLanguageModel
 
 def calculate(operation: str, a: float, b: float) -> str:
     """Perform a mathematical calculation."""
@@ -41,7 +42,7 @@ def calculate(operation: str, a: float, b: float) -> str:
 
 toolset = CallableToolset([calculate])
 
-llm = OpenAILanguageModel(base_url="...", api_key="...")
+llm = AnyLanguageModel(provider="openai", model="gpt-4o-mini", api_key="...")
 response = await llm.generate_response(
     instruction="You are a helpful assistant.",
     messages=[...],
@@ -52,8 +53,8 @@ response = await llm.generate_response(
 ## Architecture
 
 ```
-Vendor implementations (atk.openai, future: atk.huggingface, etc.)
-    │  implement
+Provider integration (atk.providers via any-llm)
+    │  implements
     ▼
 Core protocol (atk.core)
     │  defines
@@ -61,14 +62,14 @@ Core protocol (atk.core)
 Pydantic models & types (messages, tools)
 ```
 
-The core layer is the primary artifact — vendor modules are implementations of its contracts, not peers.
+The core layer is the primary artifact — provider modules are implementations of its contracts, not peers.
 
 ## Project Structure
 
 ```
 src/atk/
 ├── core/          # Abstract protocol — vendor-agnostic
-└── openai/        # OpenAI SDK implementation
+└── providers/     # any-llm SDK integration
 
 examples/          # Runnable examples (see examples/README.md)
 tests/             # Unit tests
@@ -82,9 +83,7 @@ See [examples/README.md](examples/README.md) for runnable demos including:
 
 ## Roadmap
 
-- Language model gateway — instantiate models via string identifiers (e.g. `model="openai:gpt-5.4"`, `model="hf:google/gemma-4-26B-A4B-it:Q4"`) without vendor-specific imports
 - Multimodal input support
-- HuggingFace Transformers implementation
 
 ## Requirements
 

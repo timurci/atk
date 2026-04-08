@@ -1,1 +1,1 @@
-"""Chat examples using the OpenAI language model."""
+"""Chat examples using any-llm provider integration."""

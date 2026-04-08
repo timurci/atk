@@ -1,9 +1,10 @@
-"""OpenAI language model implementation."""
+"""any-llm language model implementation."""
 
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from openai import AsyncOpenAI, Omit
+from any_llm import AnyLLM
+from any_llm.types.completion import ChatCompletion
 
 from atk.core.message import (
     AssistantMessage,
@@ -18,13 +19,13 @@ from atk.core.message import (
 )
 from atk.core.model import LanguageModel, StreamingLanguageModel
 
-from .message import OpenAIMessageMapper
-from .tool import OpenAIToolMapper
+from .message import MessageMapper
+from .tool import ToolMapper
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-    from openai.types.chat import ChatCompletionChunk
+    from any_llm.types.completion import ChatCompletionChunk
     from pydantic import BaseModel
 
     from atk.core.tool import Tool
@@ -33,7 +34,7 @@ if TYPE_CHECKING:
 class _StreamAccumulator:
     """Accumulates streaming chunks into a final AssistantMessage.
 
-    OpenAI streams tool call data across multiple chunks, with ``id``
+    Provider streams tool call data across multiple chunks, with ``id``
     and ``name`` only present in the first chunk for each tool call
     index.  This class tracks per-index state so that every emitted
     ``ToolCallDelta`` has complete ``id`` and ``name`` fields.
@@ -42,14 +43,8 @@ class _StreamAccumulator:
     def __init__(self) -> None:
         self.accumulated_text: list[str] = []
         self.accumulated_reasoning: list[str] = []
-        # Maps OpenAI tool call index (from ``delta.tool_calls[].index``)
-        # to the unique call ID string.  Only set once, on the first chunk.
         self.tool_call_ids: dict[int, str] = {}
-        # Maps tool call index to the function name.  Only set once,
-        # on the first chunk for that index.
         self.tool_call_names: dict[int, str] = {}
-        # Maps tool call index to a list of JSON argument fragments.
-        # Fragments are appended in order and concatenated at the end.
         self.tool_call_args: dict[int, list[str]] = {}
 
     def process_chunk(
@@ -63,10 +58,9 @@ class _StreamAccumulator:
             self.accumulated_text.append(delta.content)
             events.append(TextDelta(text=delta.content))
 
-        reasoning_content: str | None = getattr(delta, "reasoning_content", None)
-        if reasoning_content:
-            self.accumulated_reasoning.append(reasoning_content)
-            events.append(ThinkingDelta(thinking=reasoning_content))
+        if delta.reasoning is not None:
+            self.accumulated_reasoning.append(delta.reasoning.content)
+            events.append(ThinkingDelta(thinking=delta.reasoning.content))
 
         if delta.tool_calls is not None:
             for tc in delta.tool_calls:
@@ -107,29 +101,50 @@ class _StreamAccumulator:
         return AssistantMessage(content=content)
 
 
-class OpenAILanguageModel(LanguageModel, StreamingLanguageModel):
-    """OpenAI language model implementation."""
+class AnyLanguageModel(LanguageModel, StreamingLanguageModel):
+    """Language model implementation backed by any-llm providers."""
 
     def __init__(
         self,
-        base_url: str | None,
-        api_key: str | None = None,
+        provider: str,
         model: str | None = None,
+        api_key: str | None = None,
+        api_base: str | None = None,
+        reasoning_effort: str | None = "auto",
+        **client_args: Any,  # noqa: ANN401 — Any is required for passthrough kwargs to AnyLLM.create
     ) -> None:
-        """Initialize the OpenAI language model.
+        """Initialize the any-llm language model.
 
         Args:
-            base_url: Optional base URL for OpenAI-compatible API.
-            api_key: Optional API key.
-            model: Optional model name.
+            provider: Provider identifier (e.g. 'openai', 'anthropic', 'mistral').
+            model: Default model name. If None, provider-specific default is used.
+            api_key: Optional API key. Falls back to environment variable.
+            api_base: Optional base URL for the provider API.
+            reasoning_effort: Reasoning effort level for models that support it.
+                One of 'none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'auto'.
+            **client_args: Additional arguments passed to AnyLLM client creation.
         """
-        self.client = AsyncOpenAI(
-            base_url=base_url,
+        self._provider = provider
+        self._default_model = model
+        self._reasoning_effort = reasoning_effort
+        self._client = AnyLLM.create(
+            provider,
             api_key=api_key,
+            api_base=api_base,
+            **client_args,
         )
-        self.model: str = model if model is not None else "gpt-4o-mini"
-        self.message_mapper = OpenAIMessageMapper()
-        self.tool_mapper = OpenAIToolMapper()
+        self._message_mapper = MessageMapper()
+        self._tool_mapper = ToolMapper()
+
+    @property
+    def model(self) -> str:
+        """Return the default model name, falling back to provider default."""
+        if self._default_model is not None:
+            return self._default_model
+        error_msg = (
+            "A model name must be provided either in the constructor or per-call"
+        )
+        raise ValueError(error_msg)
 
     async def generate_response(
         self,
@@ -149,13 +164,17 @@ class OpenAILanguageModel(LanguageModel, StreamingLanguageModel):
         Returns:
             AssistantMessage response.
         """
-        response = await self.client.chat.completions.parse(
+        response = await self._client.acompletion(
             model=self.model,
-            messages=self.message_mapper.to_openai(instruction, messages),
-            tools=self.tool_mapper.to_openai(tools) if tools else Omit(),
-            response_format=response_format or Omit(),  # type: ignore[invalid-argument-type]
+            messages=self._message_mapper.to_messages(instruction, messages),
+            tools=self._tool_mapper.to_tools(tools) if tools else None,
+            response_format=response_format or None,
+            reasoning_effort=self._reasoning_effort,
         )
-        return self.message_mapper.from_openai(response.choices[0].message)
+        if not isinstance(response, ChatCompletion):
+            error_msg = "Expected ChatCompletion response for non-streaming call"
+            raise TypeError(error_msg)
+        return self._message_mapper.from_completion(response.choices[0].message)
 
     async def stream_response(
         self,
@@ -177,14 +196,15 @@ class OpenAILanguageModel(LanguageModel, StreamingLanguageModel):
             AssistantMessage containing the fully accumulated content.
         """
         if response_format is not None:
-            error_msg = "OpenAI does not support response_format with streaming"
+            error_msg = "Streaming with response_format is not supported"
             raise NotImplementedError(error_msg)
 
-        stream = await self.client.chat.completions.create(
+        stream = await self._client.acompletion(
             model=self.model,
-            messages=self.message_mapper.to_openai(instruction, messages),
-            tools=self.tool_mapper.to_openai(tools) if tools else Omit(),
+            messages=self._message_mapper.to_messages(instruction, messages),
+            tools=self._tool_mapper.to_tools(tools) if tools else None,
             stream=True,
+            reasoning_effort=self._reasoning_effort,
         )
 
         accumulator = _StreamAccumulator()
@@ -193,4 +213,4 @@ class OpenAILanguageModel(LanguageModel, StreamingLanguageModel):
             deltas = accumulator.process_chunk(chunk)
             yield AssistantStream(content=deltas)
 
-        yield AssistantMessage(content=accumulator.build_message().content)
+        yield accumulator.build_message()

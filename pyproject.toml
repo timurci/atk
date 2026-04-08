@@ -24,9 +24,9 @@ dev = [
     "ty>=0.0.20",
 ]
 examples = [
-    { include-group = "openai" },
+    { include-group = "providers" },
     "rich>=14.3.3",
 ]
-openai = [
-    "openai>=2.26.0",
+providers = [
+    "any-llm-sdk>=1.13.0",
 ]
