@@ -11,6 +11,7 @@ jobs:
     environment: release # optional: adds a manual approval gate in GitHub UI
     permissions:
       contents: write # Required to create GitHub releases
+      id-token: write # Required for PyPI trusted publishing (OIDC)
 
     steps:
       - uses: actions/checkout@v6
