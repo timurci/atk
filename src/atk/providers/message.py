@@ -24,6 +24,9 @@ from atk.core.message import (
     UserMessage,
 )
 
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
 # Heterogeneous payload type for any-llm message parameters.
 # Any is required because different LLM providers produce varied,
 # untyped payload shapes with arbitrary keys/values (e.g. "role",
