@@ -13,6 +13,7 @@ from pydantic import ValidationError
 
 from atk.core.message import (
     AssistantMessage,
+    Message,
     TextPart,
     ThinkingPart,
     ToolCallPart,
@@ -159,7 +160,8 @@ class TestFromCompletionUnsupported:
     @staticmethod
     def test_audio_raises() -> None:
         msg = ChatCompletionMessage(content="Hi", role="assistant")
-        msg.audio = object()  # type: ignore[attr-defined]
+        # Intentionally assign invalid type to verify NotImplementedError is raised.
+        msg.audio = object()  # type: ignore
         with pytest.raises(NotImplementedError, match="Audio"):
             MessageMapper.from_completion(msg)
 
@@ -174,7 +176,7 @@ class TestToMessagesBasic:
 
     @staticmethod
     def test_system_instruction_prepended() -> None:
-        messages = [
+        messages: list[Message] = [
             UserMessage(content=[TextPart(text="Hello")]),
         ]
         result = MessageMapper.to_messages("Be helpful", messages)
@@ -182,7 +184,7 @@ class TestToMessagesBasic:
 
     @staticmethod
     def test_user_message() -> None:
-        messages = [
+        messages: list[Message] = [
             UserMessage(content=[TextPart(text="What is 2+2?")]),
         ]
         result = MessageMapper.to_messages("System", messages)
@@ -193,7 +195,7 @@ class TestToMessagesBasic:
 
     @staticmethod
     def test_tool_message() -> None:
-        messages = [
+        messages: list[Message] = [
             ToolMessage(content=[ToolResultPart(tool_call_id="c1", content="result")]),
         ]
         result = MessageMapper.to_messages("System", messages)
@@ -205,7 +207,7 @@ class TestToMessagesBasic:
 
     @staticmethod
     def test_assistant_message_text() -> None:
-        messages = [
+        messages: list[Message] = [
             AssistantMessage(content=[TextPart(text="Hi there")]),
         ]
         result = MessageMapper.to_messages("System", messages)
@@ -225,7 +227,7 @@ class TestToMessagesThinking:
 
     @staticmethod
     def test_thinking_in_assistant_message() -> None:
-        messages = [
+        messages: list[Message] = [
             AssistantMessage(
                 content=[
                     ThinkingPart(thinking="I need to think..."),
@@ -242,7 +244,7 @@ class TestToMessagesThinking:
 
     @staticmethod
     def test_thinking_only_in_assistant_message() -> None:
-        messages = [
+        messages: list[Message] = [
             AssistantMessage(
                 content=[
                     ThinkingPart(thinking="Pure reasoning"),
@@ -258,7 +260,7 @@ class TestToMessagesThinking:
 
     @staticmethod
     def test_thinking_with_tool_calls() -> None:
-        messages = [
+        messages: list[Message] = [
             AssistantMessage(
                 content=[
                     ThinkingPart(thinking="Need a tool"),
@@ -289,7 +291,7 @@ class TestToMessagesMultiPart:
 
     @staticmethod
     def test_user_message_multiple_parts() -> None:
-        messages = [
+        messages: list[Message] = [
             UserMessage(
                 content=[
                     TextPart(text="Hello"),
@@ -307,7 +309,7 @@ class TestToMessagesMultiPart:
 
     @staticmethod
     def test_assistant_text_and_tool_call() -> None:
-        messages = [
+        messages: list[Message] = [
             AssistantMessage(
                 content=[
                     TextPart(text="Let me look that up."),
@@ -338,6 +340,7 @@ class TestToMessagesErrors:
     def test_invalid_content_part_in_assistant() -> None:
         """Pydantic rejects ToolResultPart in AssistantMessage content."""
         with pytest.raises(ValidationError):
+            # Intentionally pass invalid part type to verify Pydantic validation fails.
             AssistantMessage(
-                content=[ToolResultPart(tool_call_id="x", content="y")],  # type: ignore[list-item]
+                content=[ToolResultPart(tool_call_id="x", content="y")],  # type: ignore
             )

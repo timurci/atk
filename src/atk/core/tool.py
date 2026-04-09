@@ -156,9 +156,10 @@ def _map_bare_type(annotation: type, description: str) -> ToolParameter | None:
 
 def _map_type(annotation: object, description: str) -> ToolParameter:
     """Map a Python type annotation to a ToolParameter."""
-    result = _map_primitive(annotation, description)  # type: ignore[arg-type]
-    if result is not None:
-        return result
+    if isinstance(annotation, type):
+        result = _map_primitive(annotation, description)
+        if result is not None:
+            return result
 
     origin = get_origin(annotation)
     args = get_args(annotation)

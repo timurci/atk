@@ -1,7 +1,12 @@
 """Message mapper for any-llm completions API."""
 
+from __future__ import annotations
+
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 from any_llm.types.completion import (
     ChatCompletionMessage,
@@ -94,7 +99,7 @@ class MessageMapper:
 
     @staticmethod
     def to_messages(
-        instruction: str, messages: list[Message]
+        instruction: str, messages: Sequence[Message]
     ) -> list[AnyLLMPayload | ChatCompletionMessage]:
         """Convert internal messages to any-llm message format.
 
