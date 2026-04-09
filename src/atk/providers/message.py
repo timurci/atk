@@ -158,11 +158,17 @@ class MessageMapper:
             for tool_call in message.tool_calls:
                 match tool_call:
                     case ChatCompletionMessageFunctionToolCall():
+                        # Normalize empty/invalid JSON arguments to empty dict
+                        raw_args = tool_call.function.arguments or "{}"
+                        try:
+                            parsed_args: dict[str, Any] = json.loads(raw_args)
+                        except json.JSONDecodeError:
+                            parsed_args = {}
                         assistant_content.append(
                             ToolCallPart(
                                 id=tool_call.id,
                                 name=tool_call.function.name,
-                                arguments=json.loads(tool_call.function.arguments),
+                                arguments=parsed_args,
                             )
                         )
                     case _:

@@ -95,18 +95,19 @@ class _StreamAccumulator:
             content.append(ThinkingPart(thinking="".join(self.accumulated_reasoning)))
         if self.accumulated_text:
             content.append(TextPart(text="".join(self.accumulated_text)))
-        content.extend(
-            ToolCallPart(
-                id=self.tool_call_ids[idx],
-                name=self.tool_call_names[idx],
-                arguments=json.loads(
-                    "".join(self.tool_call_args[idx])
-                    if self.tool_call_args.get(idx)
-                    else "{}"
-                ),
+        for idx in sorted(self.tool_call_ids):
+            raw_args = "".join(self.tool_call_args.get(idx, [])).strip() or "{}"
+            try:
+                parsed_args: dict[str, Any] = json.loads(raw_args)
+            except json.JSONDecodeError:
+                parsed_args = {}
+            content.append(
+                ToolCallPart(
+                    id=self.tool_call_ids[idx],
+                    name=self.tool_call_names.get(idx, ""),
+                    arguments=parsed_args,
+                )
             )
-            for idx in sorted(self.tool_call_ids)
-        )
         return AssistantMessage(content=content)
 
 
