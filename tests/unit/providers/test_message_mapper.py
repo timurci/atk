@@ -210,9 +210,9 @@ class TestToMessagesBasic:
         ]
         result = MessageMapper.to_messages("System", messages)
         asst_msg = result[1]
-        assert isinstance(asst_msg, dict)
-        assert asst_msg["role"] == "assistant"
-        assert asst_msg["content"] == "Hi there"
+        assert isinstance(asst_msg, ChatCompletionMessage)
+        assert asst_msg.role == "assistant"
+        assert asst_msg.content == "Hi there"
 
 
 # ------------------------------------------------------------------ #

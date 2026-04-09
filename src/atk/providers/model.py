@@ -73,13 +73,18 @@ class _StreamAccumulator:
                     args_fragment = tc.function.arguments or ""
                     self.tool_call_args.setdefault(idx, []).append(args_fragment)
 
-                    events.append(
-                        ToolCallDelta(
-                            id=self.tool_call_ids[idx],
-                            name=self.tool_call_names[idx],
-                            arguments_delta=args_fragment,
+                    # Only emit ToolCallDelta when id and name are cached.
+                    # This ensures every emitted delta has complete data.
+                    cached_id = self.tool_call_ids.get(idx)
+                    cached_name = self.tool_call_names.get(idx)
+                    if cached_id is not None and cached_name is not None:
+                        events.append(
+                            ToolCallDelta(
+                                id=cached_id,
+                                name=cached_name,
+                                arguments_delta=args_fragment,
+                            )
                         )
-                    )
 
         return events
 
@@ -94,7 +99,11 @@ class _StreamAccumulator:
             ToolCallPart(
                 id=self.tool_call_ids[idx],
                 name=self.tool_call_names[idx],
-                arguments=json.loads("".join(self.tool_call_args[idx])),
+                arguments=json.loads(
+                    "".join(self.tool_call_args[idx])
+                    if self.tool_call_args.get(idx)
+                    else "{}"
+                ),
             )
             for idx in sorted(self.tool_call_ids)
         )
@@ -144,7 +153,7 @@ class AnyLanguageModel(LanguageModel, StreamingLanguageModel):
         api_key: str | None = None,
         api_base: str | None = None,
         reasoning_effort: str | None = "auto",
-        **client_args: Any,  # noqa: ANN401
+        **client_args: Any,  # noqa: ANN401 — Any required for passthrough kwargs to AnyLLM.create
     ) -> Self:
         """Create an AnyLanguageModel instance, auto-resolving model if None.
 
