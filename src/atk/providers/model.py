@@ -1,7 +1,7 @@
 """any-llm language model implementation."""
 
 import json
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Self
 
 from any_llm import AnyLLM
 from any_llm.types.completion import ChatCompletion
@@ -107,7 +107,7 @@ class AnyLanguageModel(LanguageModel, StreamingLanguageModel):
     def __init__(
         self,
         provider: str,
-        model: str | None = None,
+        model: str,
         api_key: str | None = None,
         api_base: str | None = None,
         reasoning_effort: str | None = "auto",
@@ -117,7 +117,7 @@ class AnyLanguageModel(LanguageModel, StreamingLanguageModel):
 
         Args:
             provider: Provider identifier (e.g. 'openai', 'anthropic', 'mistral').
-            model: Default model name. If None, provider-specific default is used.
+            model: Model name to use for completions.
             api_key: Optional API key. Falls back to environment variable.
             api_base: Optional base URL for the provider API.
             reasoning_effort: Reasoning effort level for models that support it.
@@ -125,7 +125,7 @@ class AnyLanguageModel(LanguageModel, StreamingLanguageModel):
             **client_args: Additional arguments passed to AnyLLM client creation.
         """
         self._provider = provider
-        self._default_model = model
+        self._model = model
         self._reasoning_effort = reasoning_effort
         self._client = AnyLLM.create(
             provider,
@@ -136,15 +136,60 @@ class AnyLanguageModel(LanguageModel, StreamingLanguageModel):
         self._message_mapper = MessageMapper()
         self._tool_mapper = ToolMapper()
 
+    @classmethod
+    async def create(
+        cls,
+        provider: str,
+        model: str | None = None,
+        api_key: str | None = None,
+        api_base: str | None = None,
+        reasoning_effort: str | None = "auto",
+        **client_args: Any,  # noqa: ANN401
+    ) -> Self:
+        """Create an AnyLanguageModel instance, auto-resolving model if None.
+
+        Args:
+            provider: Provider identifier (e.g. 'openai', 'anthropic', 'mistral').
+            model: Model name. If None, attempts to auto-detect from available models.
+            api_key: Optional API key. Falls back to environment variable.
+            api_base: Optional base URL for the provider API.
+            reasoning_effort: Reasoning effort level for models that support it.
+                One of 'none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'auto'.
+            **client_args: Additional arguments passed to AnyLLM client creation.
+
+        Returns:
+            Configured AnyLanguageModel instance.
+
+        Raises:
+            NotImplementedError: If model is None and multiple or no models
+                are available.
+        """
+        if model is None:
+            client = AnyLLM.create(
+                provider, api_key=api_key, api_base=api_base, **client_args
+            )
+            available_models = await client.alist_models()
+            if len(available_models) == 1:
+                model = available_models[0].id
+            else:
+                error_msg = (
+                    "Model was not provided and could not determine a default model."
+                )
+                raise NotImplementedError(error_msg)
+
+        return cls(
+            provider,
+            model,
+            api_key=api_key,
+            api_base=api_base,
+            reasoning_effort=reasoning_effort,
+            **client_args,
+        )
+
     @property
     def model(self) -> str:
-        """Return the default model name, falling back to provider default."""
-        if self._default_model is not None:
-            return self._default_model
-        error_msg = (
-            "A model name must be provided either in the constructor or per-call"
-        )
-        raise ValueError(error_msg)
+        """Return the configured model name."""
+        return self._model
 
     async def generate_response(
         self,

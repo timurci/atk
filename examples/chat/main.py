@@ -60,10 +60,10 @@ def parse_args() -> CLIArgs:
     )
 
 
-def main() -> None:
+async def main() -> None:
     """Run streaming chat loop with tool definitions."""
     args = parse_args()
-    llm = AnyLanguageModel(
+    llm = await AnyLanguageModel.create(
         provider=args["provider"],
         model=args["model"],
         api_key=args["api_key"],
@@ -72,9 +72,9 @@ def main() -> None:
     toolset = CallableToolset([calculate, search_path, read_file])
     instruction = "You are a helpful assistant that can use tools to help users."
     display_tools(toolset)
-    asyncio.run(chat_loop(llm, instruction, toolset=toolset))
+    await chat_loop(llm, instruction, toolset=toolset)
     console.print("\n[blue]Exiting chat...[/blue]\n")
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
