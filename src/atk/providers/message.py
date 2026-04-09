@@ -59,7 +59,7 @@ class MessageMapper:
                     error_msg = f"Unsupported content part type: {type(part)}"
                     raise NotImplementedError(error_msg)
 
-        content = " ".join(text_parts) if text_parts else None
+        content = "".join(text_parts) if text_parts else None
         reasoning = (
             Reasoning(content="".join(thinking_parts)) if thinking_parts else None
         )

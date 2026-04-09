@@ -6,9 +6,9 @@ import pytest
 from any_llm.types.completion import (
     ChatCompletionMessage,
     ChatCompletionMessageFunctionToolCall,
+    Function,
     Reasoning,
 )
-from openai.types.chat.chat_completion_message_function_tool_call import Function
 from pydantic import ValidationError
 
 from atk.core.message import (

@@ -66,7 +66,7 @@ The core layer is the primary artifact — provider modules are implementations 
 
 ## Project Structure
 
-```
+```text
 src/atk/
 ├── core/          # Abstract protocol — vendor-agnostic
 └── providers/     # any-llm SDK integration
