@@ -52,11 +52,11 @@ class Word(BaseModel):
     syllables: list[str]
 
 
-def main() -> None:
+async def main() -> None:
     """Run a single structured output call."""
     args = parse_args()
 
-    llm = AnyLanguageModel(
+    llm = await AnyLanguageModel.create(
         provider=args["provider"],
         model=args["model"],
         api_key=args["api_key"],
@@ -67,16 +67,14 @@ def main() -> None:
     )
     prompt = Prompt.ask("[bold cyan]Enter a word[/bold cyan]")
 
-    response = asyncio.run(
-        llm.generate_response(
-            instruction=instruction,
-            messages=[UserMessage(content=[TextPart(text=prompt)])],
-            response_format=Word,
-        )
+    response = await llm.generate_response(
+        instruction=instruction,
+        messages=[UserMessage(content=[TextPart(text=prompt)])],
+        response_format=Word,
     )
 
     console.print(f"\n[bold green]Response:[/bold green] {pretty_repr(response)}\n")
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
