@@ -28,5 +28,5 @@ examples = [
     "rich>=14.3.3",
 ]
 providers = [
-    "any-llm-sdk>=1.13.0",
+    "any-llm-sdk[all]>=1.13.0",
 ]
