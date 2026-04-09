@@ -697,36 +697,6 @@ def example_partial_args_doc():
 
 
 @pytest.fixture
-def degraded_docstring_examples():
-    """All three degraded-docstring callables as a list.
-
-    Intended for use with @pytest.mark.parametrize in a single
-    smoke test that asserts the converter does not raise on any of
-    them::
-
-        @pytest.mark.parametrize("fn", degraded_docstring_examples())
-        def test_converter_survives_bad_docs(fn):
-            result = Tool.from_callable(fn)
-            assert result is not None
-
-    Note: pytest does not support injecting a fixture value directly
-    into parametrize.  Use the raw list instead::
-
-        @pytest.mark.parametrize("fn", [
-            _example_no_docstring,
-            _example_description_only,
-            _example_partial_args_doc,
-        ])
-        def test_converter_survives_bad_docs(fn): ...
-    """
-    return [
-        _example_no_docstring,
-        _example_description_only,
-        _example_partial_args_doc,
-    ]
-
-
-@pytest.fixture
 def all_examples():
     """Every example callable as an ordered list.
 
