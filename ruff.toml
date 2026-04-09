@@ -15,5 +15,4 @@ convention = "google"
     "FBT001",  # boolean positional arg
     "FBT002",  # boolean default arg
     "PLR2004", # magic value comparison
-    "PGH003",  # use specific rule codes for type: ignore (not applicable for ty compatibility)
 ]

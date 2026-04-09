@@ -160,7 +160,7 @@ class TestFromCompletionUnsupported:
     @staticmethod
     def test_audio_raises() -> None:
         msg = ChatCompletionMessage(content="Hi", role="assistant")
-msg.audio = object()  # ty: ignore[invalid-assignment]
+        msg.audio = object()  # ty: ignore[invalid-assignment]
         with pytest.raises(NotImplementedError, match="Audio"):
             MessageMapper.from_completion(msg)
 
@@ -341,7 +341,7 @@ class TestToMessagesErrors:
         with pytest.raises(ValidationError):
             # Intentionally pass invalid part type to verify Pydantic validation fails.
             AssistantMessage(
-content=[ToolResultPart(tool_call_id="x", content="y")],  # ty: ignore[invalid-argument-type]
+                content=[ToolResultPart(tool_call_id="x", content="y")],  # ty: ignore[invalid-argument-type]
             )
 
 
