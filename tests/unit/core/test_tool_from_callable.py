@@ -562,7 +562,7 @@ class TestEdgeCases:
         assert "kwargs" not in tool.parameters
 
     def test_unannotated_parameter_omitted(self) -> None:
-        def _fn(name: str, unannotated=None) -> None:  # type: ignore[arg-type]  # noqa: D417 — unannotated param intentionally undocumented
+        def _fn(name: str, unannotated=None) -> None:  # type: ignore[arg-type]  # reason: testing unannotated param handling  # noqa: D417 — unannotated param intentionally undocumented
             """Accept unannotated param.
 
             Args:
@@ -574,7 +574,7 @@ class TestEdgeCases:
         assert "unannotated" not in tool.parameters
 
     def test_dict_non_string_key_raises(self) -> None:
-        def _fn(mapping: dict[int, str]) -> None:  # type: ignore[type-arg]
+        def _fn(mapping: dict[int, str]) -> None:  # type: ignore[type-arg]  # reason: intentionally testing non-str dict key
             """Use dict with non-str keys.
 
             Args:
@@ -598,7 +598,7 @@ class TestEdgeCases:
         assert tool.name == "_greet"
 
     def test_unsupported_type_raises(self) -> None:
-        def _fn(value: set) -> None:  # type: ignore[type-arg]
+        def _fn(value: set) -> None:  # type: ignore[type-arg]  # reason: intentionally testing unsupported type
             """Use unsupported type.
 
             Args:
