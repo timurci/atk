@@ -3,6 +3,8 @@
 A Python library that provides a unified, vendor-agnostic interface for building AI agent systems.
 
 ![GitHub License](https://img.shields.io/github/license/timurci/atk?style=flat-square)
+![CI](https://img.shields.io/github/actions/workflow/status/timurci/atk/ci.yml?branch=main&style=flat-square&label=CI)
+![Build](https://img.shields.io/github/actions/workflow/status/timurci/atk/ci.yml?branch=main&job=build&style=flat-square&label=build)
 
 
 ## Overview
