@@ -9,6 +9,8 @@ jobs:
   release:
     runs-on: ubuntu-latest
     environment: release # optional: adds a manual approval gate in GitHub UI
+    permissions:
+      contents: write # Required to create GitHub releases
 
     steps:
       - uses: actions/checkout@v6
