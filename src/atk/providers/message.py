@@ -21,37 +21,37 @@ from atk.core.message import (
     UserMessage,
 )
 
+# Heterogeneous payload type for any-llm message parameters.
+# Any is required because different LLM providers produce varied,
+# untyped payload shapes with arbitrary keys/values (e.g. "role",
+# "content", "tool_call_id"). This alias documents that intentional
+# dynamic typing at the provider boundary.
+AnyLLMPayload = dict[str, Any]
+
 
 class MessageMapper:
     """Maps between internal message types and any-llm message formats."""
 
     @staticmethod
-    def _map_assistant_message(
-        msg: AssistantMessage,
-    ) -> ChatCompletionMessage | dict[str, Any]:
-        """Map an AssistantMessage to an any-llm message parameter.
-
-        Returns a ChatCompletionMessage when thinking is present
-        (since it supports the reasoning field), otherwise a dict
-        for simplicity.
-        """
+    def _map_assistant_message(msg: AssistantMessage) -> ChatCompletionMessage:
+        """Map an AssistantMessage to an any-llm ChatCompletionMessage."""
         thinking_parts: list[str] = []
         text_parts: list[str] = []
-        tool_calls: list[dict[str, Any]] = []
+        tool_call_parts: list[ChatCompletionMessageFunctionToolCall] = []
         for part in msg.content:
             match part:
                 case TextPart():
                     text_parts.append(part.text)
                 case ToolCallPart():
-                    tool_calls.append(
-                        {
-                            "type": "function",
-                            "id": part.id,
-                            "function": {
-                                "name": part.name,
-                                "arguments": json.dumps(part.arguments),
-                            },
-                        }
+                    tool_call_parts.append(
+                        ChatCompletionMessageFunctionToolCall(
+                            id=part.id,
+                            function=Function(
+                                name=part.name,
+                                arguments=json.dumps(part.arguments),
+                            ),
+                            type="function",
+                        )
                     )
                 case ThinkingPart():
                     thinking_parts.append(part.thinking)
@@ -59,43 +59,28 @@ class MessageMapper:
                     error_msg = f"Unsupported content part type: {type(part)}"
                     raise NotImplementedError(error_msg)
 
-        content = "".join(text_parts) if text_parts else None
-        reasoning = (
+        content_str = "".join(text_parts) if text_parts else None
+        reasoning_obj = (
             Reasoning(content="".join(thinking_parts)) if thinking_parts else None
         )
 
-        if tool_calls:
-            mapped_tool_calls = [
-                ChatCompletionMessageFunctionToolCall(
-                    id=tc["id"],
-                    function=Function(
-                        name=tc["function"]["name"],
-                        arguments=tc["function"]["arguments"],
-                    ),
-                    type="function",
-                )
-                for tc in tool_calls
-            ]
+        if tool_call_parts:
             return ChatCompletionMessage(
-                content=content,
-                reasoning=reasoning,
-                tool_calls=mapped_tool_calls,
+                content=content_str,
+                reasoning=reasoning_obj,
+                tool_calls=list(tool_call_parts),
                 role="assistant",
             )
-
-        if reasoning is not None:
-            return ChatCompletionMessage(
-                content=content,
-                reasoning=reasoning,
-                role="assistant",
-            )
-
-        return {"role": "assistant", "content": content}
+        return ChatCompletionMessage(
+            content=content_str,
+            reasoning=reasoning_obj,
+            role="assistant",
+        )
 
     @staticmethod
-    def _map_user_message(msg: UserMessage) -> dict[str, Any]:
+    def _map_user_message(msg: UserMessage) -> AnyLLMPayload:
         """Map a UserMessage to an any-llm message parameter."""
-        content: list[dict[str, Any]] | str = []
+        content: list[AnyLLMPayload] | str = []
         for part in msg.content:
             match part:
                 case TextPart():
@@ -110,7 +95,7 @@ class MessageMapper:
     @staticmethod
     def to_messages(
         instruction: str, messages: list[Message]
-    ) -> list[dict[str, Any] | ChatCompletionMessage]:
+    ) -> list[AnyLLMPayload | ChatCompletionMessage]:
         """Convert internal messages to any-llm message format.
 
         Args:
@@ -120,7 +105,7 @@ class MessageMapper:
         Returns:
             List of message parameters for any-llm's completion API.
         """
-        result: list[dict[str, Any] | ChatCompletionMessage] = [
+        result: list[AnyLLMPayload | ChatCompletionMessage] = [
             {"role": "system", "content": instruction}
         ]
         for msg in messages:
