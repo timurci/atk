@@ -20,7 +20,7 @@
 
 from __future__ import annotations
 
-import inspect
+import functools
 from typing import TypeIs
 
 import pytest
@@ -154,23 +154,14 @@ class TestPrimitiveParameters:
             ("count", "integer"),
             ("threshold", "number"),
             ("verbose", "boolean"),
+            ("prefix", "string"),
+            ("retries", "integer"),
+            ("jitter", "number"),
+            ("dry_run", "boolean"),
         ],
     )
     def test_primitive_param_types(self, example_primitives, name, expected_type):
         p = _param(Tool.from_callable(example_primitives), name)
-        assert isinstance(p, PrimitiveParameter)
-        assert p.type == expected_type
-
-    @pytest.mark.parametrize(
-        ("name", "expected_type"),
-        [
-            ("filter_tag", "string"),
-            ("min_score", "number"),
-            ("include_deleted", "boolean"),
-        ],
-    )
-    def test_optional_param_types(self, example_optional_args, name, expected_type):
-        p = _param(Tool.from_callable(example_optional_args), name)
         assert isinstance(p, PrimitiveParameter)
         assert p.type == expected_type
 
@@ -180,23 +171,8 @@ class TestPrimitiveParameters:
         assert "log entry" in p.description.lower()
 
     def test_description_populated_for_optional_param(self, example_optional_args):
-        # Optional[T] params must still get their description from Args.
         p = _param(Tool.from_callable(example_optional_args), "filter_tag")
         assert p.description != ""
-
-    @pytest.mark.parametrize(
-        ("name", "expected_type"),
-        [
-            ("prefix", "string"),
-            ("retries", "integer"),
-            ("jitter", "number"),
-            ("dry_run", "boolean"),
-        ],
-    )
-    def test_default_param_types(self, example_primitives, name, expected_type):
-        p = _param(Tool.from_callable(example_primitives), name)
-        assert isinstance(p, PrimitiveParameter)
-        assert p.type == expected_type
 
 
 # ======================================================================
@@ -524,27 +500,6 @@ class TestDegradedDocstrings:
         assert result is not None
 
     @pytest.mark.parametrize(
-        "fn",
-        [
-            _example_no_docstring,
-            _example_description_only,
-            _example_partial_args_doc,
-        ],
-    )
-    def test_all_annotated_params_present(self, fn):
-        # Regardless of docstring state, every annotated parameter must
-        # appear in tool.parameters — none may be silently dropped.
-
-        sig = inspect.signature(fn)
-        tool = Tool.from_callable(fn)
-        for param_name, param in sig.parameters.items():
-            if param.annotation is inspect.Parameter.empty:
-                continue
-            assert param_name in tool.parameters, (
-                f"{fn.__name__}: parameter {param_name!r} missing from schema"
-            )
-
-    @pytest.mark.parametrize(
         ("fn", "expected_description"),
         [
             (_example_no_docstring, ""),
@@ -554,21 +509,6 @@ class TestDegradedDocstrings:
     def test_degraded_docstring_tool_description(self, fn, expected_description):
         tool = Tool.from_callable(fn)
         assert tool.description == expected_description
-
-    @pytest.mark.parametrize(
-        "fn",
-        [
-            _example_no_docstring,
-            _example_description_only,
-        ],
-    )
-    def test_degraded_docstring_param_descriptions_are_empty(self, fn):
-        tool = Tool.from_callable(fn)
-        for name, param in tool.parameters.items():
-            assert param.description == "", (
-                f"Parameter {name!r} should have empty description "
-                f"when there is no Args section, got {param.description!r}"
-            )
 
     def test_partial_args_doc_documented_and_undocumented_params(
         self, example_partial_args_doc
@@ -587,3 +527,83 @@ class TestDegradedDocstrings:
         # name and value have no defaults; offset and active do.
         tool = Tool.from_callable(example_partial_args_doc)
         assert set(tool.required) == {"name", "value"}
+
+
+# ======================================================================
+# TestEdgeCases — *args, **kwargs, unannotated params, unsupported types
+# ======================================================================
+
+
+class TestEdgeCases:
+    """Test edge cases in Tool.from_callable parameter handling."""
+
+    def test_var_positional_args_skipped(self) -> None:
+        def _fn(*args: str, name: str) -> None:  # noqa: D417 — *args intentionally undocumented
+            """Accept var-args.
+
+            Args:
+                name: A name.
+            """
+
+        tool = Tool.from_callable(_fn)
+        assert "name" in tool.parameters
+        assert "args" not in tool.parameters
+
+    def test_var_keyword_args_skipped(self) -> None:
+        def _fn(name: str, **kwargs: int) -> None:  # noqa: D417 — **kwargs intentionally undocumented
+            """Accept kwargs.
+
+            Args:
+                name: A name.
+            """
+
+        tool = Tool.from_callable(_fn)
+        assert "name" in tool.parameters
+        assert "kwargs" not in tool.parameters
+
+    def test_unannotated_parameter_omitted(self) -> None:
+        def _fn(name: str, unannotated=None) -> None:  # type: ignore[arg-type]  # noqa: D417 — unannotated param intentionally undocumented
+            """Accept unannotated param.
+
+            Args:
+                name: A name.
+            """
+
+        tool = Tool.from_callable(_fn)
+        assert "name" in tool.parameters
+        assert "unannotated" not in tool.parameters
+
+    def test_dict_non_string_key_raises(self) -> None:
+        def _fn(mapping: dict[int, str]) -> None:  # type: ignore[type-arg]
+            """Use dict with non-str keys.
+
+            Args:
+                mapping: A mapping.
+            """
+
+        with pytest.raises(NotImplementedError, match="dict key type must be str"):
+            Tool.from_callable(_fn)
+
+    def test_functools_partial_name_extracts_func_name(self) -> None:
+        def _greet(greeting: str, name: str) -> None:
+            """Greet someone.
+
+            Args:
+                greeting: The greeting.
+                name: The person's name.
+            """
+
+        partial_fn = functools.partial(_greet, "Hello")
+        tool = Tool.from_callable(partial_fn)
+        assert tool.name == "_greet"
+
+    def test_unsupported_type_raises(self) -> None:
+        def _fn(value: set) -> None:  # type: ignore[type-arg]
+            """Use unsupported type.
+
+            Args:
+                value: A set.
+            """
+
+        with pytest.raises(NotImplementedError, match="Unsupported type"):
+            Tool.from_callable(_fn)

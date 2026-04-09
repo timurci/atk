@@ -81,7 +81,15 @@ ToolParameter = Annotated[
 
 
 def _resolve_optional(annotation: object) -> tuple[object, bool]:
-    """Return (inner_type, is_optional) for ``T | None`` annotations."""
+    """Return (inner_type, is_optional) for ``T | None`` annotations.
+
+    This function intentionally handles only ``T | None`` (or
+    ``Union[T, None]``) — the sole optional form that maps to a plain
+    ``T`` schema with the parameter omitted from ``required``.  Other
+    union types (``A | B`` with no ``None``) are intentionally not
+    supported because a tool argument should declare a single, clear
+    type to avoid ambiguity for the LLM.
+    """
     origin = get_origin(annotation)
     if origin is types.UnionType or origin is Union:
         args = get_args(annotation)
@@ -156,7 +164,7 @@ def _map_bare_type(annotation: type, description: str) -> ToolParameter | None:
 
 def _map_type(annotation: object, description: str) -> ToolParameter:
     """Map a Python type annotation to a ToolParameter."""
-    if isinstance(annotation, type):
+if isinstance(annotation, type):
         result = _map_primitive(annotation, description)
         if result is not None:
             return result

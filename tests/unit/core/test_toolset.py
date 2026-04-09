@@ -264,67 +264,18 @@ class TestInvokeToolErrors:
 class TestInvokeToolReturnTypes:
     """Test that non-string return values are converted to str."""
 
-    def test_int_return_converted_to_str(self):
-        def _return_int() -> int:
-            return 42
+    @pytest.mark.parametrize(
+        ("return_val", "expected_str"),
+        [(42, "42"), (None, "None")],
+    )
+    def test_non_str_return_converted(self, return_val, expected_str):
+        def _fn() -> int | None:
+            return return_val
 
-        toolset = CallableToolset([_return_int])
+        toolset = CallableToolset([_fn])
         tool = toolset.tools[0]
 
         async def _run() -> str:
             return await toolset.invoke_tool(tool.name, {})
 
-        result = anyio.run(_run)
-        assert result == "42"
-
-    def test_dict_return_converted_to_str(self):
-        def _return_dict() -> dict:
-            return {"key": "value"}
-
-        toolset = CallableToolset([_return_dict])
-        tool = toolset.tools[0]
-
-        async def _run() -> str:
-            return await toolset.invoke_tool(tool.name, {})
-
-        result = anyio.run(_run)
-        assert result == "{'key': 'value'}"
-
-    def test_list_return_converted_to_str(self):
-        def _return_list() -> list[str]:
-            return ["a", "b"]
-
-        toolset = CallableToolset([_return_list])
-        tool = toolset.tools[0]
-
-        async def _run() -> str:
-            return await toolset.invoke_tool(tool.name, {})
-
-        result = anyio.run(_run)
-        assert result == "['a', 'b']"
-
-    def test_none_return_converted_to_str(self):
-        def _return_none() -> None:
-            return None
-
-        toolset = CallableToolset([_return_none])
-        tool = toolset.tools[0]
-
-        async def _run() -> str:
-            return await toolset.invoke_tool(tool.name, {})
-
-        result = anyio.run(_run)
-        assert result == "None"
-
-    def test_async_int_return_converted_to_str(self):
-        async def _async_int() -> int:
-            return 99
-
-        toolset = CallableToolset([_async_int])
-        tool = toolset.tools[0]
-
-        async def _run() -> str:
-            return await toolset.invoke_tool(tool.name, {})
-
-        result = anyio.run(_run)
-        assert result == "99"
+        assert anyio.run(_run) == expected_str

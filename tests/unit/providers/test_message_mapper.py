@@ -160,8 +160,7 @@ class TestFromCompletionUnsupported:
     @staticmethod
     def test_audio_raises() -> None:
         msg = ChatCompletionMessage(content="Hi", role="assistant")
-        # Intentionally assign invalid type to verify NotImplementedError is raised.
-        msg.audio = object()  # type: ignore
+msg.audio = object()  # ty: ignore[invalid-assignment]
         with pytest.raises(NotImplementedError, match="Audio"):
             MessageMapper.from_completion(msg)
 
@@ -342,5 +341,98 @@ class TestToMessagesErrors:
         with pytest.raises(ValidationError):
             # Intentionally pass invalid part type to verify Pydantic validation fails.
             AssistantMessage(
-                content=[ToolResultPart(tool_call_id="x", content="y")],  # type: ignore
+content=[ToolResultPart(tool_call_id="x", content="y")],  # ty: ignore[invalid-argument-type]
             )
+
+
+# ------------------------------------------------------------------ #
+# from_completion — malformed JSON arguments                           #
+# ------------------------------------------------------------------ #
+
+
+class TestFromCompletionMalformedJson:
+    """Test that malformed JSON in tool call arguments falls back to empty dict."""
+
+    @staticmethod
+    def test_malformed_json_arguments() -> None:
+        msg = ChatCompletionMessage(
+            content=None,
+            role="assistant",
+            tool_calls=[
+                ChatCompletionMessageFunctionToolCall(
+                    id="call_bad",
+                    function=Function(name="broken_fn", arguments="not json at all"),
+                    type="function",
+                ),
+            ],
+        )
+        result = MessageMapper.from_completion(msg)
+        part = result.content[0]
+        assert isinstance(part, ToolCallPart)
+        assert part.arguments == {}
+
+    @staticmethod
+    def test_whitespace_only_arguments() -> None:
+        msg = ChatCompletionMessage(
+            content=None,
+            role="assistant",
+            tool_calls=[
+                ChatCompletionMessageFunctionToolCall(
+                    id="call_ws",
+                    function=Function(name="ws_fn", arguments="   "),
+                    type="function",
+                ),
+            ],
+        )
+        result = MessageMapper.from_completion(msg)
+        part = result.content[0]
+        assert isinstance(part, ToolCallPart)
+        assert part.arguments == {}
+
+    @staticmethod
+    def test_valid_json_arguments_unchanged() -> None:
+        msg = ChatCompletionMessage(
+            content=None,
+            role="assistant",
+            tool_calls=[
+                ChatCompletionMessageFunctionToolCall(
+                    id="call_ok",
+                    function=Function(name="ok_fn", arguments='{"key": "value"}'),
+                    type="function",
+                ),
+            ],
+        )
+        result = MessageMapper.from_completion(msg)
+        part = result.content[0]
+        assert isinstance(part, ToolCallPart)
+        assert part.arguments == {"key": "value"}
+
+
+# ------------------------------------------------------------------ #
+# from_completion — mixed content                                      #
+# ------------------------------------------------------------------ #
+
+
+class TestFromCompletionMixedContent:
+    """Test messages with both content and tool calls."""
+
+    @staticmethod
+    def test_content_and_tool_calls_together() -> None:
+        msg = ChatCompletionMessage(
+            content="Let me look that up.",
+            role="assistant",
+            tool_calls=[
+                ChatCompletionMessageFunctionToolCall(
+                    id="call_1",
+                    function=Function(name="search", arguments='{"q": "test"}'),
+                    type="function",
+                ),
+            ],
+        )
+        result = MessageMapper.from_completion(msg)
+        text_parts = [p for p in result.content if isinstance(p, TextPart)]
+        tool_parts = [p for p in result.content if isinstance(p, ToolCallPart)]
+        assert len(text_parts) == 1
+        assert text_parts[0].text == "Let me look that up."
+        assert len(tool_parts) == 1
+        assert tool_parts[0].name == "search"
