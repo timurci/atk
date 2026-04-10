@@ -149,25 +149,19 @@ async def chat_loop(
     messages: list[Message] = []
     tools = toolset.tools if toolset else None
 
-    try:
-        while True:
-            if not messages or isinstance(messages[-1], AssistantMessage):
-                user_message = Prompt.ask("\n[bold cyan]User[/bold cyan]")
-                if user_message in {"exit", "quit"}:
-                    break
-                messages.append(UserMessage(content=[TextPart(text=user_message)]))
+    while True:
+        if not messages or isinstance(messages[-1], AssistantMessage):
+            user_message = Prompt.ask("\n[bold cyan]User[/bold cyan]")
+            if user_message in {"exit", "quit"}:
+                break
+            messages.append(UserMessage(content=[TextPart(text=user_message)]))
 
-            response = await _stream_turn(llm, instruction, messages, tools)
-            messages.append(response)
+        response = await _stream_turn(llm, instruction, messages, tools)
+        messages.append(response)
 
-            if toolset:
-                tool_calls = [
-                    p for p in response.content if isinstance(p, ToolCallPart)
-                ]
-                if tool_calls:
-                    tool_message = await _handle_tool_calls(response, toolset)
-                    display_tool_response(tool_message)
-                    messages.append(tool_message)
-
-    except EOFError, KeyboardInterrupt:
-        pass
+        if toolset:
+            tool_calls = [p for p in response.content if isinstance(p, ToolCallPart)]
+            if tool_calls:
+                tool_message = await _handle_tool_calls(response, toolset)
+                display_tool_response(tool_message)
+                messages.append(tool_message)
