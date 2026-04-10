@@ -2,6 +2,7 @@
 
 import argparse
 import asyncio
+import contextlib
 from typing import TypedDict
 
 from chat.chat_loop import chat_loop  # ty: ignore[unresolved-import]
@@ -15,8 +16,6 @@ from rich.console import Console
 
 from atk.core.toolset import CallableToolset
 from atk.providers.model import AnyLanguageModel
-
-console = Console()
 
 
 class CLIArgs(TypedDict):
@@ -33,13 +32,13 @@ def parse_args() -> CLIArgs:
     parser = argparse.ArgumentParser(description="Chat with an LLM provider")
     parser.add_argument(
         "--provider",
-        default="openai",
-        help="LLM provider identifier (default: openai)",
+        required=True,
+        help="LLM provider identifier",
     )
     parser.add_argument(
         "--model",
         default=None,
-        help="Model name to use (provider default if omitted)",
+        help="Model name",
     )
     parser.add_argument(
         "--api-key",
@@ -73,8 +72,10 @@ async def main() -> None:
     instruction = "You are a helpful assistant that can use tools to help users."
     display_tools(toolset)
     await chat_loop(llm, instruction, toolset=toolset)
-    console.print("\n[blue]Exiting chat...[/blue]\n")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    console = Console()
+    with contextlib.suppress(EOFError, KeyboardInterrupt):
+        asyncio.run(main())
+    console.print("\n[blue]Exiting chat...[/blue]\n")
