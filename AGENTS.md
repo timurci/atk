@@ -22,7 +22,7 @@
 - **Testing**: `pytest`
 - **Key libraries**:
   - `pydantic` — data models and validation (core dependency)
-  - `any-llm-sdk` — unified LLM provider interface (optional, in `[dependency-groups.providers]`)
+  - `any-llm-sdk` — unified LLM provider interface (optional)
 
 ---
 
@@ -37,7 +37,7 @@ uv sync
 ### Install with optional provider support
 
 ```bash
-uv sync --group providers
+uv sync --extra providers
 ```
 
 ### Run tests
@@ -249,6 +249,6 @@ A test is **low-value** when removing it does not reduce confidence in correctne
 ## Known Gotchas
 
 - Python `3.14+` is required — do not use syntax or features unavailable in this version.
-- The `any-llm-sdk` dependency is optional (in `[dependency-groups.providers]`). Code in `atk.providers/` will fail to import without it — this is intentional.
+- The `any-llm-sdk` dependency is optional. Code in `atk.providers/` will fail to import without it — this is intentional.
 - Ruff is configured with `select = ["ALL"]` and only ignores `COM812` globally. Per-file ignores for `tests/**` disable annotation requirements, assert bans, and docstring requirements.
 - `atk.providers` uses `any-llm-sdk` which re-exports OpenAI SDK types. The `openai` package is a transitive dependency — do not import it directly in `atk.providers`; always use `any_llm.types.completion` or construct dicts for message format.
