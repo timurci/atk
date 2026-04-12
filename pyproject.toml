@@ -1,6 +1,6 @@
 [project]
 name = "atk"
-version = "1.0.0"
+version = "1.0.1"
 description = "Agent Toolkit"
 license = "GPL-3.0-or-later"
 license-files = ["LICEN[CS]E*"]

@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.1] - 2026-04-12
+### Fixed
+
+- Moved providers to optional dependencies (`dc4ddca`)
+
 ## [1.0.0] - 2026-04-09
 
 _If you are upgrading from 0.x: the `atk.providers.openai` module has been replaced by `atk.providers` using the any-llm SDK. Update imports from `AnyLanguageModel` (formerly `OpenAILanguageModel`) and configure providers via the `provider` parameter instead of `api_key`/`model` kwargs._
