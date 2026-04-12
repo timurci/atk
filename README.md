@@ -29,7 +29,7 @@ uv sync
 ### With provider support
 
 ```bash
-uv sync --group providers
+uv sync --extra providers
 ```
 
 ## Usage

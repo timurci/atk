@@ -13,6 +13,11 @@ dependencies = [
     "pydantic>=2.12.5",
 ]
 
+[project.optional-dependencies]
+providers = [
+    "any-llm-sdk[all]>=1.13.0",
+]
+
 [build-system]
 requires = ["uv_build>=0.10.2,<0.11.0"]
 build-backend = "uv_build"
@@ -24,9 +29,6 @@ dev = [
     "ty>=0.0.29",
 ]
 examples = [
-    { include-group = "providers" },
-    "rich>=14.3.3",
-]
-providers = [
     "any-llm-sdk[all]>=1.13.0",
+    "rich>=14.3.3",
 ]
