@@ -16,6 +16,7 @@ from atk.core.message import (
     Message,
     TextPart,
     ThinkingPart,
+    ToolArgumentsParsingError,
     ToolCallPart,
     ToolMessage,
     ToolResultPart,
@@ -390,7 +391,9 @@ class TestFromCompletionMalformedJson:
 
     @staticmethod
     @pytest.mark.parametrize("arguments", ['["not", "object"]', '"text"', "1"])
-    def test_non_object_json_arguments_raise_type_error(arguments: str) -> None:
+    def test_non_object_json_arguments_raise_tool_arguments_parsing_error(
+        arguments: str,
+    ) -> None:
         msg = ChatCompletionMessage(
             content=None,
             role="assistant",
@@ -403,7 +406,10 @@ class TestFromCompletionMalformedJson:
             ],
         )
 
-        with pytest.raises(TypeError, match="JSON object"):
+        with pytest.raises(
+            ToolArgumentsParsingError,
+            match="JSON parsing did not match to a dictionary format",
+        ):
             MessageMapper.from_completion(msg)
 
     @staticmethod
