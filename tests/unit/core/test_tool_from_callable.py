@@ -88,6 +88,10 @@ class TestToolMetadata:
         tool = Tool.from_callable(example_primitives)
         assert tool.name == "_example_primitives"
 
+    def test_name_override_replaces_function_name(self, example_primitives):
+        tool = Tool.from_callable(example_primitives, name="send_log")
+        assert tool.name == "send_log"
+
     def test_description_is_first_docstring_paragraph(self, example_primitives):
         tool = Tool.from_callable(example_primitives)
         # First paragraph of the docstring, stripped of leading/trailing whitespace.

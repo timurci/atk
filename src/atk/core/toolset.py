@@ -5,12 +5,12 @@ from __future__ import annotations
 import asyncio
 import functools
 import inspect
-from typing import TYPE_CHECKING, Protocol, TypeIs
+from collections.abc import Awaitable, Callable
+from typing import Protocol, TypeIs, cast
 
 from .tool import Tool
 
-if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+CallableToolEntry = Callable[..., object] | tuple[str, Callable[..., object]]
 
 
 class Toolset(Protocol):
@@ -58,18 +58,31 @@ async def _call_maybe_async(
 class CallableToolset:
     """A Toolset built from a list of callable functions."""
 
-    def __init__(self, callables: list[Callable[..., object]]) -> None:
+    def __init__(self, callables: list[CallableToolEntry]) -> None:
         """Initialize a CallableToolset from a list of callables.
 
         Args:
-            callables: Functions to register as tools in this toolset.
+            callables: Functions or ``(tool_name, function)`` entries to register.
         """
         self._callables: dict[str, Callable[..., object]] = {}
         self._tools: list[Tool] = []
-        for fn in callables:
-            tool = Tool.from_callable(fn)
+        for entry in callables:
+            name, fn = self._normalize_entry(entry)
+            tool = Tool.from_callable(fn, name=name)
+            if tool.name in self._callables:
+                msg = f"Duplicate tool name: {tool.name!r}"
+                raise KeyError(msg)
             self._tools.append(tool)
             self._callables[tool.name] = fn
+
+    @staticmethod
+    def _normalize_entry(
+        entry: CallableToolEntry,
+    ) -> tuple[str | None, Callable[..., object]]:
+        """Return the optional name override and callable for a constructor entry."""
+        if isinstance(entry, tuple):
+            return cast("tuple[str, Callable[..., object]]", entry)
+        return None, entry
 
     @property
     def tools(self) -> list[Tool]:
