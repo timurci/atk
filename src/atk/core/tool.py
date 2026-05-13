@@ -80,6 +80,53 @@ ToolParameter = Annotated[
 ]
 
 
+def tool_parameter_to_json_schema(param: ToolParameter) -> dict[str, object]:
+    """Convert a ToolParameter to a JSON Schema-like property schema."""
+    schema: dict[str, object] = {"description": param.description}
+
+    match param:
+        case PrimitiveParameter():
+            schema["type"] = param.type
+        case EnumParameter():
+            schema["type"] = "string"
+            schema["enum"] = sorted(param.enum)
+        case ArrayParameter():
+            schema["type"] = "array"
+            if param.items is not None:
+                schema["items"] = tool_parameter_to_json_schema(param.items)
+        case ObjectParameter():
+            schema["type"] = "object"
+            match param.properties:
+                case dict():
+                    schema["properties"] = {
+                        name: tool_parameter_to_json_schema(prop)
+                        for name, prop in param.properties.items()
+                    }
+                case None:
+                    pass
+                case _:
+                    schema["additionalProperties"] = tool_parameter_to_json_schema(
+                        param.properties
+                    )
+
+    return schema
+
+
+def tool_to_json_schema(tool: Tool) -> dict[str, object]:
+    """Convert a Tool to its JSON Schema-like function parameter schema."""
+    schema: dict[str, object] = {
+        "type": "object",
+        "properties": {
+            name: tool_parameter_to_json_schema(param)
+            for name, param in tool.parameters.items()
+        },
+    }
+    if tool.required:
+        schema["required"] = list(tool.required)
+
+    return schema
+
+
 def _resolve_optional(annotation: object) -> tuple[object, bool]:
     """Return (inner_type, is_optional) for ``T | None`` annotations.
 
