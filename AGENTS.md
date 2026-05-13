@@ -161,9 +161,10 @@ Pydantic models & types (message.py, tool.py)
 - **Provider layer** (`atk.providers/`): A **third-party integration adapter** that implements the core protocol using the `any-llm-sdk` library. Contains mappers that translate between internal types and any-llm SDK types. This module is independent and should not be imported by other vendor modules except through `atk.core`. Because it depends on `any-llm-sdk`, it delegates provider selection to any-llm (which uses official provider SDKs under the hood).
 
 **Design principles:**
-- **YAGNI**: Do not add plugin systems, registries, or abstract base classes unless a concrete second implementation exists or is explicitly required.
-- **KISS**: Prefer plain functions and Pydantic models over class hierarchies. Introduce abstractions only when duplication is clear and justified.
+- **KISS**: Prefer the simplest implementation that satisfies the current requirement. Prefer plain functions and Pydantic models over class hierarchies. Avoid premature abstraction, unnecessary indirection, and abstractions that do not remove real duplication.
+- **YAGNI**: Do not add plugin systems, registries, config hooks, extensibility points, or abstract base classes unless a concrete second implementation exists or is explicitly required.
 - **Core-first**: `atk.core` is the primary artifact. Provider modules are implementations of its contracts, not peers.
+- **Let errors propagate**: Do not catch exceptions only to return a silent fallback (e.g., empty bytes, `None`, or an empty list). That masks the real failure and makes debugging harder. Only catch exceptions if the code can meaningfully recover or add context; otherwise, let the exception propagate.
 
 ---
 
@@ -179,10 +180,12 @@ Pydantic models & types (message.py, tool.py)
 - All public function signatures must have complete type annotations.
 - Prefer `X | None` over `Optional[X]`.
 - Do not use `Any` unless interfacing with an untyped third-party library, and always add a comment explaining why.
+- Do not use `cast`. Use type narrowing, validation, overloads, or clearer data modeling instead.
 
 ### Error handling
 - Raise `NotImplementedError` with a descriptive message for unimplemented methods or unsupported cases.
 - Never raise bare `Exception` or `ValueError` — use specific exception types or `NotImplementedError`.
+- Custom project error classes must inherit directly from `Exception`, not from built-in exception subclasses.
 - Provider modules should raise `NotImplementedError` for unsupported features (e.g. audio output, custom tool calls) with a clear message.
 
 ### Imports
@@ -238,6 +241,7 @@ A test is **low-value** when removing it does not reduce confidence in correctne
 - **Do not** import from one provider module into another.
 - **Do not** add synchronous implementations of `LanguageModel` — the protocol is async-only.
 - **Do not** suppress type errors with `# type: ignore` without an explanatory comment.
+- **Do not** use `cast`; model or narrow the type properly.
 - **Do not** edit `ruff.toml` or add `# noqa` suppressions without a comment explaining the exception.
 - **Do not** introduce plugin systems or registries unless a concrete second provider implementation exists.
 - **Do not** write tests that exercise the same code path with identical assertions — consolidate with `@pytest.mark.parametrize` or merge into the broader test.
