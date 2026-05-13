@@ -7,6 +7,7 @@ from rich.live import Live
 from rich.panel import Panel
 from rich.prompt import Prompt
 
+from atk.core import invoke_tool_calls
 from atk.core.message import (
     AssistantMessage,
     AssistantStream,
@@ -16,8 +17,6 @@ from atk.core.message import (
     ThinkingDelta,
     ToolCallDelta,
     ToolCallPart,
-    ToolMessage,
-    ToolResultPart,
     UserMessage,
 )
 
@@ -79,19 +78,6 @@ class _StreamState:
             for cid in self.tool_call_ids
         )
         return Group(*renderables)
-
-
-async def _handle_tool_calls(
-    response: AssistantMessage,
-    toolset: Toolset,
-) -> ToolMessage:
-    """Invoke tools from the assistant response and return a ToolMessage."""
-    tool_calls = [p for p in response.content if isinstance(p, ToolCallPart)]
-    tool_results: list[ToolResultPart] = []
-    for part in tool_calls:
-        result = await toolset.invoke_tool(part.name, part.arguments)
-        tool_results.append(ToolResultPart(tool_call_id=part.id, content=result))
-    return ToolMessage(content=tool_results)
 
 
 async def _stream_turn(
@@ -162,6 +148,6 @@ async def chat_loop(
         if toolset:
             tool_calls = [p for p in response.content if isinstance(p, ToolCallPart)]
             if tool_calls:
-                tool_message = await _handle_tool_calls(response, toolset)
+                tool_message = await invoke_tool_calls(response, toolset)
                 display_tool_response(tool_message)
                 messages.append(tool_message)

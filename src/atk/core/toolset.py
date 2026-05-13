@@ -8,6 +8,7 @@ import inspect
 from collections.abc import Awaitable, Callable
 from typing import Protocol, TypeIs, cast
 
+from .message import AssistantMessage, ToolCallPart, ToolMessage, ToolResultPart
 from .tool import Tool
 
 CallableToolEntry = Callable[..., object] | tuple[str, Callable[..., object]]
@@ -32,6 +33,20 @@ class Toolset(Protocol):
             KeyError: If no tool with the given name exists in the toolset.
         """
         ...
+
+
+async def invoke_tool_calls(
+    message: AssistantMessage,
+    toolset: Toolset,
+) -> ToolMessage:
+    """Invoke tool calls from an assistant message and return their results."""
+    tool_results: list[ToolResultPart] = []
+    for part in message.content:
+        if not isinstance(part, ToolCallPart):
+            continue
+        result = await toolset.invoke_tool(part.name, part.arguments)
+        tool_results.append(ToolResultPart(tool_call_id=part.id, content=result))
+    return ToolMessage(content=tool_results)
 
 
 def _is_async_callable(

@@ -15,7 +15,7 @@ from .message import (
 )
 from .model import LanguageModel, StreamingLanguageModel
 from .tool import Tool, tool_parameter_to_json_schema, tool_to_json_schema
-from .toolset import CallableToolset, Toolset
+from .toolset import CallableToolset, Toolset, invoke_tool_calls
 
 __all__ = [
     "AssistantMessage",
@@ -34,6 +34,7 @@ __all__ = [
     "ToolResultPart",
     "Toolset",
     "UserMessage",
+    "invoke_tool_calls",
     "tool_parameter_to_json_schema",
     "tool_to_json_schema",
 ]
