@@ -49,4 +49,5 @@ hooks = [
   { id = "check-toml" },
   { id = "check-yaml" },
   { id = "check-json" },
+  { id = "no-commit-to-branch"}  # default: main, master
 ]
