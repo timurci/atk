@@ -264,11 +264,12 @@ class Tool(BaseModel):
     )
 
     @staticmethod
-    def from_callable(fn: Callable[..., object]) -> Tool:
+    def from_callable(fn: Callable[..., object], *, name: str | None = None) -> Tool:
         """Create a Tool from a callable function.
 
         Args:
             fn: The callable object to convert into a Tool.
+            name: Optional model-facing name to use instead of the callable name.
 
         Returns:
             A Tool instance representing the callable function.
@@ -293,10 +294,13 @@ class Tool(BaseModel):
             if not has_default and not is_optional:
                 required.append(param_name)
             parameters[param_name] = tool_param
-        if isinstance(fn, functools.partial):
-            tool_name = getattr(fn.func, "__name__", fn.func.__class__.__name__)
+        if name is None:
+            if isinstance(fn, functools.partial):
+                tool_name = getattr(fn.func, "__name__", fn.func.__class__.__name__)
+            else:
+                tool_name = getattr(fn, "__name__", fn.__class__.__name__)
         else:
-            tool_name = getattr(fn, "__name__", fn.__class__.__name__)
+            tool_name = name
         return Tool(
             name=tool_name,
             description=description,

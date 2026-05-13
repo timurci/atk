@@ -93,6 +93,24 @@ class TestCallableToolsetTools:
         names = [t.name for t in sync_toolset.tools]
         assert set(names) == {"_sync_greet", "_sync_add"}
 
+    def test_alias_appears_in_tools(self):
+        toolset = CallableToolset([("greet", _sync_greet)])
+        assert [t.name for t in toolset.tools] == ["greet"]
+
+    def test_alias_overrides_callable_name(self):
+        toolset = CallableToolset([("greet", _sync_greet)])
+        assert toolset.tools[0].name != "_sync_greet"
+
+    def test_tool_order_follows_registration_order(self):
+        toolset = CallableToolset(
+            [
+                ("greet", _sync_greet),
+                _sync_add,
+                ("fetch", _async_fetch),
+            ]
+        )
+        assert [t.name for t in toolset.tools] == ["greet", "_sync_add", "fetch"]
+
     def test_tool_descriptions_from_docstrings(self, sync_toolset):
         greet_tool = next(t for t in sync_toolset.tools if t.name == "_sync_greet")
         assert "Greet a person" in greet_tool.description
@@ -127,6 +145,15 @@ class TestInvokeToolSync:
 
         result = anyio.run(_run)
         assert result == "7"
+
+    def test_invoke_aliased_tool(self):
+        toolset = CallableToolset([("greet", _sync_greet)])
+
+        async def _run() -> str:
+            return await toolset.invoke_tool("greet", {"name": "Alice"})
+
+        result = anyio.run(_run)
+        assert result == "Hello, Alice!"
 
     def test_invoke_with_default_params(self):
         def _with_default(mode: Literal["fast", "slow"] = "fast") -> str:
@@ -217,6 +244,18 @@ class TestInvokeToolAsync:
 
 class TestInvokeToolErrors:
     """Test error handling in invoke_tool."""
+
+    @pytest.mark.parametrize(
+        "callables",
+        [
+            [_sync_greet, _sync_greet],
+            [("lookup", _sync_greet), ("lookup", _sync_add)],
+            [_sync_greet, ("_sync_greet", _sync_add)],
+        ],
+    )
+    def test_duplicate_tool_names_raise_keyerror(self, callables):
+        with pytest.raises(KeyError, match="Duplicate tool name"):
+            CallableToolset(callables)
 
     def test_unknown_tool_raises_keyerror(self, sync_toolset):
         async def _run() -> str:
