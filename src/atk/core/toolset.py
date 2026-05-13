@@ -6,12 +6,21 @@ import asyncio
 import functools
 import inspect
 from collections.abc import Awaitable, Callable
-from typing import Protocol, TypeIs, cast
+from typing import Protocol, TypeIs
 
 from .message import AssistantMessage, ToolCallPart, ToolMessage, ToolResultPart
 from .tool import Tool
 
 CallableToolEntry = Callable[..., object] | tuple[str, Callable[..., object]]
+
+
+class DuplicateToolNameError(Exception):
+    """Raised when registering more than one callable for a tool name."""
+
+    def __init__(self, tool_name: str) -> None:
+        """Initialize the error with the duplicate tool name."""
+        self.tool_name = tool_name
+        super().__init__(f"Duplicate tool name: {tool_name!r}")
 
 
 class Toolset(Protocol):
@@ -105,8 +114,7 @@ class CallableToolset:
             name, fn = self._normalize_entry(entry)
             tool = Tool.from_callable(fn, name=name)
             if tool.name in self._callables:
-                msg = f"Duplicate tool name: {tool.name!r}"
-                raise KeyError(msg)
+                raise DuplicateToolNameError(tool.name)
             self._tools.append(tool)
             self._callables[tool.name] = fn
 
@@ -116,7 +124,11 @@ class CallableToolset:
     ) -> tuple[str | None, Callable[..., object]]:
         """Return the optional name override and callable for a constructor entry."""
         if isinstance(entry, tuple):
-            return cast("tuple[str, Callable[..., object]]", entry)
+            name, fn = entry
+            if not isinstance(name, str) or not callable(fn):
+                msg = "Tool entries must be callables or (tool_name, callable) tuples."
+                raise TypeError(msg)
+            return name, fn
         return None, entry
 
     @property

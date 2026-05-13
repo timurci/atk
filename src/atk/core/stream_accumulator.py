@@ -15,6 +15,14 @@ from .message import (
 )
 
 
+class ToolArgumentsParsingError(Exception):
+    """Raised when streamed tool call arguments use an invalid format."""
+
+    def __init__(self, message: str) -> None:
+        """Initialize the error with a diagnostic message."""
+        super().__init__(message)
+
+
 class AssistantStreamAccumulator:
     """Accumulates normalized assistant stream deltas."""
 
@@ -78,12 +86,10 @@ class AssistantStreamAccumulator:
         if not stripped_arguments:
             return {}
 
-        try:
-            parsed_arguments = json.loads(stripped_arguments)
-        except json.JSONDecodeError:
-            return {}
+        parsed_arguments = json.loads(stripped_arguments)
 
         if not isinstance(parsed_arguments, dict):
-            return {}
+            msg = "JSON parsing did not match to a dictionary format"
+            raise ToolArgumentsParsingError(msg)
 
         return parsed_arguments

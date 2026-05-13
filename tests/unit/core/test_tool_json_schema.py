@@ -1,10 +1,9 @@
-"""Unit tests for core tool JSON Schema helpers."""
+"""Unit tests for core tool JSON Schema conversion."""
 
 from __future__ import annotations
 
 import pytest
 
-from atk.core import tool_parameter_to_json_schema, tool_to_json_schema
 from atk.core.tool import (
     ArrayParameter,
     EnumParameter,
@@ -28,7 +27,7 @@ class TestToolParameterToJsonSchema:
     )
     def test_primitive_parameter_schema(self, type_val, expected_type):
         param = PrimitiveParameter(type=type_val, description="test")
-        result = tool_parameter_to_json_schema(param)
+        result = param.to_json_schema()
         assert result == {"type": expected_type, "description": "test"}
 
     @staticmethod
@@ -36,7 +35,7 @@ class TestToolParameterToJsonSchema:
         param = EnumParameter(
             type="enum", description="Alignment mode", enum={"left", "center", "right"}
         )
-        result = tool_parameter_to_json_schema(param)
+        result = param.to_json_schema()
         assert result == {
             "type": "string",
             "description": "Alignment mode",
@@ -46,7 +45,7 @@ class TestToolParameterToJsonSchema:
     @staticmethod
     def test_bare_array_parameter_schema() -> None:
         param = ArrayParameter(type="array", description="A list of items", items=None)
-        result = tool_parameter_to_json_schema(param)
+        result = param.to_json_schema()
         assert result == {"type": "array", "description": "A list of items"}
 
     @staticmethod
@@ -56,7 +55,7 @@ class TestToolParameterToJsonSchema:
             description="A list of strings",
             items=PrimitiveParameter(type="string", description="A string"),
         )
-        result = tool_parameter_to_json_schema(param)
+        result = param.to_json_schema()
         assert result == {
             "type": "array",
             "description": "A list of strings",
@@ -68,7 +67,7 @@ class TestToolParameterToJsonSchema:
         param = ObjectParameter(
             type="object", description="Free-form data", properties=None
         )
-        result = tool_parameter_to_json_schema(param)
+        result = param.to_json_schema()
         assert result == {"type": "object", "description": "Free-form data"}
 
     @staticmethod
@@ -78,7 +77,7 @@ class TestToolParameterToJsonSchema:
             description="String-to-int mapping",
             properties=PrimitiveParameter(type="integer", description="Count"),
         )
-        result = tool_parameter_to_json_schema(param)
+        result = param.to_json_schema()
         assert result == {
             "type": "object",
             "description": "String-to-int mapping",
@@ -95,7 +94,7 @@ class TestToolParameterToJsonSchema:
                 "age": PrimitiveParameter(type="integer", description="The age"),
             },
         )
-        result = tool_parameter_to_json_schema(param)
+        result = param.to_json_schema()
         assert result == {
             "type": "object",
             "description": "A structured object",
@@ -120,7 +119,7 @@ class TestToolToJsonSchema:
             },
             required=["query"],
         )
-        result = tool_to_json_schema(tool)
+        result = tool.to_json_schema()
         assert result == {
             "type": "object",
             "properties": {
@@ -140,10 +139,37 @@ class TestToolToJsonSchema:
             },
             required=[],
         )
-        result = tool_to_json_schema(tool)
+        result = tool.to_json_schema()
         assert result == {
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "Search query."},
             },
         }
+
+    @staticmethod
+    def test_tool_json_schema_describes_llm_function_parameters() -> None:
+        tool = Tool(
+            name="search",
+            description="Search indexed documents.",
+            parameters={
+                "query": PrimitiveParameter(type="string", description="Search query."),
+            },
+            required=["query"],
+        )
+
+        result = tool.to_json_schema()
+        properties = result["properties"]
+
+        assert isinstance(properties, dict)
+        assert properties == {
+            "query": {"type": "string", "description": "Search query."},
+        }
+        assert "name" not in properties
+
+    @staticmethod
+    def test_model_json_schema_still_describes_the_pydantic_model() -> None:
+        model_schema = Tool.model_json_schema()
+
+        assert "name" in model_schema["properties"]
+        assert "parameters" in model_schema["properties"]

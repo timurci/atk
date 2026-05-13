@@ -164,12 +164,9 @@ class MessageMapper:
             for tool_call in message.tool_calls:
                 match tool_call:
                     case ChatCompletionMessageFunctionToolCall():
-                        # Normalize empty/invalid JSON arguments to empty dict
-                        raw_args = tool_call.function.arguments or "{}"
-                        try:
-                            parsed_args: dict[str, Any] = json.loads(raw_args)
-                        except json.JSONDecodeError:
-                            parsed_args = {}
+                        parsed_args = MessageMapper._parse_tool_arguments(
+                            tool_call.function.arguments,
+                        )
                         assistant_content.append(
                             ToolCallPart(
                                 id=tool_call.id,
@@ -186,3 +183,16 @@ class MessageMapper:
             raise NotImplementedError(error_msg)
 
         return AssistantMessage(content=assistant_content)
+
+    @staticmethod
+    def _parse_tool_arguments(raw_arguments: str | None) -> dict[str, Any]:
+        """Parse provider tool call arguments into an object dictionary."""
+        stripped_arguments = (raw_arguments or "").strip()
+        if not stripped_arguments:
+            return {}
+
+        parsed_arguments = json.loads(stripped_arguments)
+        if not isinstance(parsed_arguments, dict):
+            error_msg = "Tool call arguments must decode to a JSON object."
+            raise TypeError(error_msg)
+        return parsed_arguments

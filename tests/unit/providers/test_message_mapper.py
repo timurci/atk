@@ -351,10 +351,10 @@ class TestToMessagesErrors:
 
 
 class TestFromCompletionMalformedJson:
-    """Test that malformed JSON in tool call arguments falls back to empty dict."""
+    """Test provider tool call argument parsing."""
 
     @staticmethod
-    def test_malformed_json_arguments() -> None:
+    def test_malformed_json_arguments_raises_json_decode_error() -> None:
         msg = ChatCompletionMessage(
             content=None,
             role="assistant",
@@ -366,10 +366,9 @@ class TestFromCompletionMalformedJson:
                 ),
             ],
         )
-        result = MessageMapper.from_completion(msg)
-        part = result.content[0]
-        assert isinstance(part, ToolCallPart)
-        assert part.arguments == {}
+
+        with pytest.raises(json.JSONDecodeError):
+            MessageMapper.from_completion(msg)
 
     @staticmethod
     def test_whitespace_only_arguments() -> None:
@@ -388,6 +387,24 @@ class TestFromCompletionMalformedJson:
         part = result.content[0]
         assert isinstance(part, ToolCallPart)
         assert part.arguments == {}
+
+    @staticmethod
+    @pytest.mark.parametrize("arguments", ['["not", "object"]', '"text"', "1"])
+    def test_non_object_json_arguments_raise_type_error(arguments: str) -> None:
+        msg = ChatCompletionMessage(
+            content=None,
+            role="assistant",
+            tool_calls=[
+                ChatCompletionMessageFunctionToolCall(
+                    id="call_bad",
+                    function=Function(name="bad_fn", arguments=arguments),
+                    type="function",
+                ),
+            ],
+        )
+
+        with pytest.raises(TypeError, match="JSON object"):
+            MessageMapper.from_completion(msg)
 
     @staticmethod
     def test_valid_json_arguments_unchanged() -> None:
