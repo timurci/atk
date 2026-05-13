@@ -15,7 +15,7 @@ from atk.core import (
     ToolCallDelta,
     ToolCallPart,
 )
-from atk.core.stream_accumulator import ToolArgumentsParsingError
+from atk.core.message import ToolArgumentsParsingError
 
 
 def _text_parts(message: AssistantMessage) -> list[TextPart]:

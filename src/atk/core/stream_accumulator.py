@@ -1,8 +1,5 @@
 """Accumulate streaming assistant deltas into a final message."""
 
-import json
-from typing import Any
-
 from .message import (
     AssistantMessage,
     AssistantStream,
@@ -12,15 +9,8 @@ from .message import (
     ThinkingPart,
     ToolCallDelta,
     ToolCallPart,
+    parse_tool_arguments,
 )
-
-
-class ToolArgumentsParsingError(Exception):
-    """Raised when streamed tool call arguments use an invalid format."""
-
-    def __init__(self, message: str) -> None:
-        """Initialize the error with a diagnostic message."""
-        super().__init__(message)
 
 
 class AssistantStreamAccumulator:
@@ -70,7 +60,7 @@ class AssistantStreamAccumulator:
                 ToolCallPart(
                     id=tool_call_id,
                     name=self._tool_call_names[tool_call_id],
-                    arguments=self._parse_arguments(
+                    arguments=parse_tool_arguments(
                         "".join(self._tool_call_arguments[tool_call_id]),
                     ),
                 )
@@ -79,17 +69,3 @@ class AssistantStreamAccumulator:
         )
 
         return AssistantMessage(content=content)
-
-    @staticmethod
-    def _parse_arguments(raw_arguments: str) -> dict[str, Any]:
-        stripped_arguments = raw_arguments.strip()
-        if not stripped_arguments:
-            return {}
-
-        parsed_arguments = json.loads(stripped_arguments)
-
-        if not isinstance(parsed_arguments, dict):
-            msg = "JSON parsing did not match to a dictionary format"
-            raise ToolArgumentsParsingError(msg)
-
-        return parsed_arguments

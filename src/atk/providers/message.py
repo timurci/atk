@@ -22,6 +22,7 @@ from atk.core.message import (
     ToolMessage,
     ToolResultPart,
     UserMessage,
+    parse_tool_arguments,
 )
 
 if TYPE_CHECKING:
@@ -164,7 +165,7 @@ class MessageMapper:
             for tool_call in message.tool_calls:
                 match tool_call:
                     case ChatCompletionMessageFunctionToolCall():
-                        parsed_args = MessageMapper._parse_tool_arguments(
+                        parsed_args = parse_tool_arguments(
                             tool_call.function.arguments,
                         )
                         assistant_content.append(
@@ -183,16 +184,3 @@ class MessageMapper:
             raise NotImplementedError(error_msg)
 
         return AssistantMessage(content=assistant_content)
-
-    @staticmethod
-    def _parse_tool_arguments(raw_arguments: str | None) -> dict[str, Any]:
-        """Parse provider tool call arguments into an object dictionary."""
-        stripped_arguments = (raw_arguments or "").strip()
-        if not stripped_arguments:
-            return {}
-
-        parsed_arguments = json.loads(stripped_arguments)
-        if not isinstance(parsed_arguments, dict):
-            error_msg = "Tool call arguments must decode to a JSON object."
-            raise TypeError(error_msg)
-        return parsed_arguments

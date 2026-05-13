@@ -1,8 +1,32 @@
 """Message schema for language models."""
 
+import json
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field
+
+
+class ToolArgumentsParsingError(Exception):
+    """Raised when tool call arguments use an invalid format."""
+
+    def __init__(self, message: str) -> None:
+        """Initialize the error with a diagnostic message."""
+        super().__init__(message)
+
+
+def parse_tool_arguments(raw_arguments: str | None) -> dict[str, Any]:
+    """Parse raw tool call arguments into a dictionary."""
+    stripped_arguments = (raw_arguments or "").strip()
+    if not stripped_arguments:
+        return {}
+
+    parsed_arguments = json.loads(stripped_arguments)
+
+    if not isinstance(parsed_arguments, dict):
+        msg = "JSON parsing did not match to a dictionary format"
+        raise ToolArgumentsParsingError(msg)
+
+    return parsed_arguments
 
 
 class TextPart(BaseModel):
