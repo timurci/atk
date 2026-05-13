@@ -1,8 +1,9 @@
 """Maps between internal tools and any-llm tool schema."""
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from atk.core.tool import Tool, tool_to_json_schema
+if TYPE_CHECKING:
+    from atk.core.tool import Tool
 
 # any-llm accepts heterogeneous nested tool dictionaries without a precise
 # exported schema type.
@@ -28,7 +29,7 @@ class ToolMapper:
                 "function": {
                     "name": tool.name,
                     "description": tool.description,
-                    "parameters": tool_to_json_schema(tool),
+                    "parameters": tool.to_json_schema(),
                     "strict": True,
                 },
             }

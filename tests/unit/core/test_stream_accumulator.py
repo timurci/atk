@@ -1,5 +1,7 @@
 """Tests for AssistantStreamAccumulator."""
 
+import json
+
 import pytest
 
 from atk.core import (
@@ -13,6 +15,7 @@ from atk.core import (
     ToolCallDelta,
     ToolCallPart,
 )
+from atk.core.stream_accumulator import ToolArgumentsParsingError
 
 
 def _text_parts(message: AssistantMessage) -> list[TextPart]:
@@ -151,8 +154,8 @@ class TestAssistantStreamAccumulatorToolCalls:
         ]
 
     @staticmethod
-    @pytest.mark.parametrize("arguments_delta", ["", "{invalid"])
-    def test_empty_or_invalid_tool_call_json_becomes_empty_dict(
+    @pytest.mark.parametrize("arguments_delta", ["", "   "])
+    def test_empty_tool_call_json_becomes_empty_dict(
         arguments_delta: str,
     ) -> None:
         accumulator = AssistantStreamAccumulator()
@@ -168,6 +171,40 @@ class TestAssistantStreamAccumulatorToolCalls:
 
         assert len(tool_parts) == 1
         assert tool_parts[0].arguments == {}
+
+    @staticmethod
+    def test_malformed_tool_call_json_raises_json_decode_error() -> None:
+        accumulator = AssistantStreamAccumulator()
+        accumulator.add_delta(
+            ToolCallDelta(
+                id="call_1",
+                name="search",
+                arguments_delta="{invalid",
+            )
+        )
+
+        with pytest.raises(json.JSONDecodeError):
+            accumulator.build_message()
+
+    @staticmethod
+    @pytest.mark.parametrize("arguments_delta", ['["not", "object"]', '"text"', "1"])
+    def test_non_object_tool_call_json_raises_tool_arguments_parsing_error(
+        arguments_delta: str,
+    ) -> None:
+        accumulator = AssistantStreamAccumulator()
+        accumulator.add_delta(
+            ToolCallDelta(
+                id="call_1",
+                name="search",
+                arguments_delta=arguments_delta,
+            )
+        )
+
+        with pytest.raises(
+            ToolArgumentsParsingError,
+            match="JSON parsing did not match to a dictionary format",
+        ):
+            accumulator.build_message()
 
 
 class TestAssistantStreamAccumulatorCombined:

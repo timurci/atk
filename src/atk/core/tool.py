@@ -34,6 +34,10 @@ class PrimitiveParameter(BaseModel):
     type: Literal["string", "integer", "number", "boolean"]
     description: str
 
+    def to_json_schema(self) -> dict[str, object]:
+        """Return this parameter's LLM tool/function JSON Schema."""
+        return {"type": self.type, "description": self.description}
+
 
 class EnumParameter(BaseModel):
     """Represents an enumeration parameter with a fixed set of allowed values."""
@@ -41,6 +45,14 @@ class EnumParameter(BaseModel):
     type: Literal["enum"]
     description: str
     enum: set[str]
+
+    def to_json_schema(self) -> dict[str, object]:
+        """Return this parameter's LLM tool/function JSON Schema."""
+        return {
+            "type": "string",
+            "description": self.description,
+            "enum": sorted(self.enum),
+        }
 
 
 class ArrayParameter(BaseModel):
@@ -54,6 +66,16 @@ class ArrayParameter(BaseModel):
     type: Literal["array"]
     description: str
     items: ToolParameter | None = None
+
+    def to_json_schema(self) -> dict[str, object]:
+        """Return this parameter's LLM tool/function JSON Schema."""
+        schema: dict[str, object] = {
+            "type": "array",
+            "description": self.description,
+        }
+        if self.items is not None:
+            schema["items"] = self.items.to_json_schema()
+        return schema
 
 
 class ObjectParameter(BaseModel):
@@ -73,58 +95,29 @@ class ObjectParameter(BaseModel):
     description: str
     properties: dict[str, ToolParameter] | ToolParameter | None = None
 
+    def to_json_schema(self) -> dict[str, object]:
+        """Return this parameter's LLM tool/function JSON Schema."""
+        schema: dict[str, object] = {
+            "type": "object",
+            "description": self.description,
+        }
+        match self.properties:
+            case dict():
+                schema["properties"] = {
+                    name: prop.to_json_schema()
+                    for name, prop in self.properties.items()
+                }
+            case None:
+                pass
+            case _:
+                schema["additionalProperties"] = self.properties.to_json_schema()
+        return schema
+
 
 ToolParameter = Annotated[
     PrimitiveParameter | EnumParameter | ArrayParameter | ObjectParameter,
     Field(discriminator="type"),
 ]
-
-
-def tool_parameter_to_json_schema(param: ToolParameter) -> dict[str, object]:
-    """Convert a ToolParameter to a JSON Schema-like property schema."""
-    schema: dict[str, object] = {"description": param.description}
-
-    match param:
-        case PrimitiveParameter():
-            schema["type"] = param.type
-        case EnumParameter():
-            schema["type"] = "string"
-            schema["enum"] = sorted(param.enum)
-        case ArrayParameter():
-            schema["type"] = "array"
-            if param.items is not None:
-                schema["items"] = tool_parameter_to_json_schema(param.items)
-        case ObjectParameter():
-            schema["type"] = "object"
-            match param.properties:
-                case dict():
-                    schema["properties"] = {
-                        name: tool_parameter_to_json_schema(prop)
-                        for name, prop in param.properties.items()
-                    }
-                case None:
-                    pass
-                case _:
-                    schema["additionalProperties"] = tool_parameter_to_json_schema(
-                        param.properties
-                    )
-
-    return schema
-
-
-def tool_to_json_schema(tool: Tool) -> dict[str, object]:
-    """Convert a Tool to its JSON Schema-like function parameter schema."""
-    schema: dict[str, object] = {
-        "type": "object",
-        "properties": {
-            name: tool_parameter_to_json_schema(param)
-            for name, param in tool.parameters.items()
-        },
-    }
-    if tool.required:
-        schema["required"] = list(tool.required)
-
-    return schema
 
 
 def _resolve_optional(annotation: object) -> tuple[object, bool]:
@@ -262,6 +255,24 @@ class Tool(BaseModel):
     required: list[str] = Field(
         default_factory=list, description="List of required parameter names."
     )
+
+    def to_json_schema(self) -> dict[str, object]:
+        """Return this tool's LLM function-parameters JSON Schema.
+
+        This emits the schema sent to LLM tool/function APIs. It is distinct
+        from Pydantic's ``BaseModel.model_json_schema()``, which describes the
+        ``Tool`` model itself.
+        """
+        schema: dict[str, object] = {
+            "type": "object",
+            "properties": {
+                name: param.to_json_schema() for name, param in self.parameters.items()
+            },
+        }
+        if self.required:
+            schema["required"] = list(self.required)
+
+        return schema
 
     @staticmethod
     def from_callable(fn: Callable[..., object], *, name: str | None = None) -> Tool:

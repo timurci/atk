@@ -9,7 +9,7 @@ import anyio
 import pytest
 
 from atk.core.tool import Tool
-from atk.core.toolset import CallableToolset
+from atk.core.toolset import CallableToolset, DuplicateToolNameError
 
 # ------------------------------------------------------------------ #
 # Test callables
@@ -253,9 +253,10 @@ class TestInvokeToolErrors:
             [_sync_greet, ("_sync_greet", _sync_add)],
         ],
     )
-    def test_duplicate_tool_names_raise_keyerror(self, callables):
-        with pytest.raises(KeyError, match="Duplicate tool name"):
+    def test_duplicate_tool_names_raise_dedicated_error(self, callables):
+        with pytest.raises(DuplicateToolNameError, match="Duplicate tool name") as exc:
             CallableToolset(callables)
+        assert exc.value.tool_name in str(exc.value)
 
     def test_unknown_tool_raises_keyerror(self, sync_toolset):
         async def _run() -> str:
