@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.1.0] - 2026-05-13
+
+### Added
+
+- Add `AssistantStreamAccumulator` for building final assistant messages from streamed deltas ([`2fbb9c9`](https://github.com/timurci/atk/commit/2fbb9c9))
+- Add `invoke_tool_calls()` for executing assistant tool calls through a toolset ([`b32f604`](https://github.com/timurci/atk/commit/b32f604))
+- Add callable tool aliases for registering callables under explicit tool names ([`f7bf76d`](https://github.com/timurci/atk/commit/f7bf76d))
+- Export tool JSON Schema helpers from core parameter models ([`51eef28`](https://github.com/timurci/atk/commit/51eef28))
+
+### Changed
+
+- Centralize tool argument parsing across core and provider message handling ([`5724a8b`](https://github.com/timurci/atk/commit/5724a8b))
+- Move tool schema conversion onto core models ([`9ba2a9e`](https://github.com/timurci/atk/commit/9ba2a9e))
+
 ## [1.0.1] - 2026-04-12
 ### Fixed
 
