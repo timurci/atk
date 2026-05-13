@@ -1,6 +1,5 @@
 """any-llm language model implementation."""
 
-import json
 from typing import TYPE_CHECKING, Any, Self
 
 from any_llm import AnyLLM
@@ -11,13 +10,11 @@ from atk.core.message import (
     AssistantStream,
     Message,
     TextDelta,
-    TextPart,
     ThinkingDelta,
-    ThinkingPart,
     ToolCallDelta,
-    ToolCallPart,
 )
 from atk.core.model import LanguageModel, StreamingLanguageModel
+from atk.core.stream_accumulator import AssistantStreamAccumulator
 
 from .message import MessageMapper
 from .tool import ToolMapper
@@ -31,21 +28,18 @@ if TYPE_CHECKING:
     from atk.core.tool import Tool
 
 
-class _StreamAccumulator:
-    """Accumulates streaming chunks into a final AssistantMessage.
+class _ChunkDeltaMapper:
+    """Maps provider streaming chunks into normalized core deltas.
 
     Provider streams tool call data across multiple chunks, with ``id``
     and ``name`` only present in the first chunk for each tool call
-    index.  This class tracks per-index state so that every emitted
+    index. This class tracks per-index state so that every emitted
     ``ToolCallDelta`` has complete ``id`` and ``name`` fields.
     """
 
     def __init__(self) -> None:
-        self.accumulated_text: list[str] = []
-        self.accumulated_reasoning: list[str] = []
         self.tool_call_ids: dict[int, str] = {}
         self.tool_call_names: dict[int, str] = {}
-        self.tool_call_args: dict[int, list[str]] = {}
 
     def process_chunk(
         self, chunk: ChatCompletionChunk
@@ -55,11 +49,9 @@ class _StreamAccumulator:
         events: list[TextDelta | ToolCallDelta | ThinkingDelta] = []
 
         if delta.content is not None:
-            self.accumulated_text.append(delta.content)
             events.append(TextDelta(text=delta.content))
 
         if delta.reasoning is not None:
-            self.accumulated_reasoning.append(delta.reasoning.content)
             events.append(ThinkingDelta(thinking=delta.reasoning.content))
 
         if delta.tool_calls is not None:
@@ -71,7 +63,6 @@ class _StreamAccumulator:
                     if tc.function.name is not None:
                         self.tool_call_names[idx] = tc.function.name
                     args_fragment = tc.function.arguments or ""
-                    self.tool_call_args.setdefault(idx, []).append(args_fragment)
 
                     # Only emit ToolCallDelta when id and name are cached.
                     # This ensures every emitted delta has complete data.
@@ -87,28 +78,6 @@ class _StreamAccumulator:
                         )
 
         return events
-
-    def build_message(self) -> AssistantMessage:
-        """Build the final accumulated AssistantMessage."""
-        content: list[TextPart | ToolCallPart | ThinkingPart] = []
-        if self.accumulated_reasoning:
-            content.append(ThinkingPart(thinking="".join(self.accumulated_reasoning)))
-        if self.accumulated_text:
-            content.append(TextPart(text="".join(self.accumulated_text)))
-        for idx in sorted(self.tool_call_ids):
-            raw_args = "".join(self.tool_call_args.get(idx, [])).strip() or "{}"
-            try:
-                parsed_args: dict[str, Any] = json.loads(raw_args)
-            except json.JSONDecodeError:
-                parsed_args = {}
-            content.append(
-                ToolCallPart(
-                    id=self.tool_call_ids[idx],
-                    name=self.tool_call_names.get(idx, ""),
-                    arguments=parsed_args,
-                )
-            )
-        return AssistantMessage(content=content)
 
 
 class AnyLanguageModel(LanguageModel, StreamingLanguageModel):
@@ -262,10 +231,13 @@ class AnyLanguageModel(LanguageModel, StreamingLanguageModel):
             reasoning_effort=self._reasoning_effort,
         )
 
-        accumulator = _StreamAccumulator()
+        chunk_mapper = _ChunkDeltaMapper()
+        accumulator = AssistantStreamAccumulator()
 
         async for chunk in stream:
-            deltas = accumulator.process_chunk(chunk)
-            yield AssistantStream(content=deltas)
+            deltas = chunk_mapper.process_chunk(chunk)
+            stream_chunk = AssistantStream(content=deltas)
+            accumulator.add_stream(stream_chunk)
+            yield stream_chunk
 
         yield accumulator.build_message()
