@@ -39,7 +39,27 @@ async def invoke_tool_calls(
     message: AssistantMessage,
     toolset: Toolset,
 ) -> ToolMessage:
-    """Invoke tool calls from an assistant message and return their results."""
+    """Invoke tool calls from an ``AssistantMessage`` with a ``Toolset``.
+
+    Processes each ``ToolCallPart`` in ``message.content`` and ignores non-tool
+    parts. For every tool call, this calls ``Toolset.invoke_tool`` with the
+    tool call name and arguments, then wraps the returned string in a
+    ``ToolResultPart`` using the original tool call ID.
+
+    Args:
+        message: The ``AssistantMessage`` whose ``ToolCallPart`` items should be
+            invoked.
+        toolset: The ``Toolset`` used to invoke each requested tool.
+
+    Returns:
+        A ``ToolMessage`` containing one ``ToolResultPart`` for each processed
+        ``ToolCallPart``, in message order. If the assistant message contains no
+        tool calls, the returned ``ToolMessage`` has empty content.
+
+    Raises:
+        KeyError: Propagated from ``Toolset.invoke_tool`` when a tool name is not
+            available in the toolset.
+    """
     tool_results: list[ToolResultPart] = []
     for part in message.content:
         if not isinstance(part, ToolCallPart):
