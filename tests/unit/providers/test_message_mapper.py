@@ -341,7 +341,7 @@ class TestToMessagesErrors:
         messages = [object()]
 
         with pytest.raises(NotImplementedError, match="Unsupported message role"):
-            MessageMapper.to_messages("System", messages)  # ty: ignore[invalid-argument-type]
+            MessageMapper.to_messages("System", messages)  # ty: ignore[invalid-argument-type]  # reason: intentionally bypasses Message typing to test runtime validation
 
     @staticmethod
     def test_invalid_content_part_in_assistant() -> None:

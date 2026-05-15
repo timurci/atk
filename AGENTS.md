@@ -204,7 +204,7 @@ Pydantic models & types (message.py, tool.py)
 - **Do not** put provider-specific code in `atk.core/` — it must remain provider-agnostic.
 - **Do not** import from one provider module into another.
 - **Do not** add synchronous implementations of `LanguageModel` — the protocol is async-only.
-- **Do not** suppress type errors with `# type: ignore` without an explanatory comment.
+- **Do not** suppress type errors with `# type: ignore` or `# ty: ignore` without an explanatory comment.
 - **Do not** use `cast`; model or narrow the type properly.
 - **Do not** edit `ruff.toml` or add `# noqa` suppressions without a comment explaining the exception.
 - **Do not** introduce plugin systems or registries unless a concrete second provider implementation exists.
