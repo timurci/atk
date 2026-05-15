@@ -197,42 +197,6 @@ Pydantic models & types (message.py, tool.py)
 
 ---
 
-## Testing Conventions
-
-- Unit tests live in `tests/unit/` and mirror the `src/atk/` structure. These tests exercise individual functions and classes in isolation — no network calls, no external services.
-- Use `conftest.py` for shared fixtures — do not hardcode test data inline across multiple tests.
-- Tests should be independent and not rely on external state or execution order.
-
-### When to add tests
-
-- **New public function or class**: Add at least one test covering the primary happy path and any documented edge cases.
-- **Bug fix**: Add a test that reproduces the bug (it must fail without the fix) and passes with the fix in place. This prevents regressions.
-- **New behavior or feature**: Add tests that exercise the documented contract — both the expected result and the error/edge cases the feature explicitly handles.
-
-Not every change requires a test. Use judgment:
-- Pure refactors that preserve behavior (renames, extracting functions, reordering) do not need new tests.
-- Changes to private helpers with no new branching logic may not need tests if existing coverage already exercises them.
-- Documentation, config, or formatting changes never need tests.
-
-### Avoiding redundant or low-value tests
-
-A test is **low-value** when removing it does not reduce confidence in correctness. Apply these rules:
-
-- **Do not duplicate coverage**: If test A and test B exercise the exact same code path with the same assertions, keep only one. Use `@pytest.mark.parametrize` to consolidate inputs that differ only in data, not logic.
-- **Do not test the language or stdlib**: Asserting that `str(42) == "42"` or that `json.loads("{}")` returns `{}` tests Python, not your code. Test the code path that *produces* or *consumes* the value, not the built-in conversion.
-- **Do not test implementation details that Pydantic already guarantees**: For example, verifying that a Pydantic model's fields all appear after construction is redundant if the model validates on instantiation.
-- **Do not parametrize over trivially different inputs when the mapping logic is already proven**: Once you have tested that `_map_type(str, ...)` returns a `PrimitiveParameter(type="string")`, you do not need a separate test for `_map_type(float, ...)` — unless the mapping differs per type. If all cases follow the same pattern, parametrize them together in a single test rather than scattering identical assertions across multiple methods.
-- **Every test must protect against a distinct failure mode**: Before writing a test, ask "what real bug would this catch?" If the answer is "none" — e.g., the assertion can only fail due to a change in the same test — the test is low-value.
-
-### Test organization
-
-- Group tests by class or concern (e.g. `TestToolMetadata`, `TestEdgeCases`) so that related assertions are co-located.
-- Parametrize data-driven inputs rather than copy-pasting test methods with different values.
-- Keep test fixtures in `conftest.py` when reused across test files. Prefer inline definitions for single-use helpers.
-- Use `@pytest.mark.parametrize` for edge cases (empty inputs, unsupported types, error conditions) rather than writing separate test methods for each.
-
----
-
 ## What NOT to Do
 
 - **Do not** add dependencies without `uv add [package]` (updates `pyproject.toml` and lockfile).
@@ -244,9 +208,6 @@ A test is **low-value** when removing it does not reduce confidence in correctne
 - **Do not** use `cast`; model or narrow the type properly.
 - **Do not** edit `ruff.toml` or add `# noqa` suppressions without a comment explaining the exception.
 - **Do not** introduce plugin systems or registries unless a concrete second provider implementation exists.
-- **Do not** write tests that exercise the same code path with identical assertions — consolidate with `@pytest.mark.parametrize` or merge into the broader test.
-- **Do not** test Python built-in behavior (e.g., `str()` conversion, `json.loads`) — test your code that calls them.
-- **Do not** add a test without asking whether a real bug would cause it to fail. If the test can only fail due to an error in the test itself, remove it.
 
 ---
 
