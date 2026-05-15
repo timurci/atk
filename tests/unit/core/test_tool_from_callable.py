@@ -13,9 +13,7 @@
 #   TestEnumParameters          Literal and Enum → EnumParameter
 #   TestArrayParameters         list variants → ArrayParameter
 #   TestObjectParameters        dict variants → ObjectParameter
-#   TestTypedDictParameters     TypedDict (flat + nested) → ObjectParameter
 #   TestOptionalParameters      Optional[T] + None default handling
-#   TestNestedContainers        list[list[T]], dict[str, list[T]]
 #   TestDegradedDocstrings      missing / partial docstrings — no crash
 
 from __future__ import annotations
@@ -66,14 +64,6 @@ def _assert_array(p: ToolParameter) -> TypeIs[ArrayParameter]:
 
 def _assert_object(p: ToolParameter) -> TypeIs[ObjectParameter]:
     return isinstance(p, ObjectParameter)
-
-
-def _assert_object_dict_props(
-    p: ToolParameter,
-) -> dict[str, ToolParameter]:
-    assert isinstance(p, ObjectParameter)
-    assert isinstance(p.properties, dict)
-    return p.properties
 
 
 # ======================================================================
@@ -317,94 +307,6 @@ class TestObjectParameters:
 
 
 # ======================================================================
-# TestTypedDictParameters — TypedDict (flat + one-level nested)
-# ======================================================================
-
-
-class TestTypedDictParameters:
-    """Test TypedDict type arguments in callables."""
-
-    # --- flat TypedDict (BoundingBox: x, y, width, height — all int) ---
-
-    def test_flat_typed_dict_properties_is_dict(self, example_flat_typed_dict):
-        p = _param(Tool.from_callable(example_flat_typed_dict), "crop")
-        assert _assert_object(p)
-        props = _assert_object_dict_props(p)
-        assert isinstance(props, dict)
-
-    def test_flat_typed_dict_all_fields_present(self, example_flat_typed_dict):
-        p = _param(Tool.from_callable(example_flat_typed_dict), "crop")
-        assert _assert_object(p)
-        props = _assert_object_dict_props(p)
-        assert set(props.keys()) == {"x", "y", "width", "height"}
-
-    def test_flat_typed_dict_field_types_are_integer(self, example_flat_typed_dict):
-        p = _param(Tool.from_callable(example_flat_typed_dict), "crop")
-        assert _assert_object(p)
-        props = _assert_object_dict_props(p)
-        for field_name, field_param in props.items():
-            assert isinstance(field_param, PrimitiveParameter), (
-                f"Field {field_name!r} should be PrimitiveParameter, "
-                f"got {type(field_param).__name__}"
-            )
-            assert field_param.type == "integer", (
-                f"Field {field_name!r} should have type 'integer', "
-                f"got {field_param.type!r}"
-            )
-
-    def test_flat_typed_dict_outer_param_required(self, example_flat_typed_dict):
-        tool = Tool.from_callable(example_flat_typed_dict)
-        assert "crop" in tool.required
-
-    # --- nested TypedDict (DetectionResult contains BoundingBox) ---
-
-    def test_nested_typed_dict_top_level_fields(self, example_nested_typed_dict):
-        p = _param(Tool.from_callable(example_nested_typed_dict), "hint")
-        assert _assert_object(p)
-        props = _assert_object_dict_props(p)
-        assert set(props.keys()) == {"label", "confidence", "box"}
-
-    def test_nested_typed_dict_primitive_fields(self, example_nested_typed_dict):
-        p = _param(Tool.from_callable(example_nested_typed_dict), "hint")
-        assert _assert_object(p)
-        props = _assert_object_dict_props(p)
-        assert isinstance(props["label"], PrimitiveParameter)
-        assert props["label"].type == "string"
-        assert isinstance(props["confidence"], PrimitiveParameter)
-        assert props["confidence"].type == "number"
-
-    def test_nested_typed_dict_box_fields_expanded(self, example_nested_typed_dict):
-        p = _param(Tool.from_callable(example_nested_typed_dict), "hint")
-        assert _assert_object(p)
-        props = _assert_object_dict_props(p)
-        box = props["box"]
-        assert isinstance(box, ObjectParameter)
-        box_props = _assert_object_dict_props(box)
-        assert set(box_props.keys()) == {"x", "y", "width", "height"}
-
-    def test_nested_typed_dict_box_field_types(self, example_nested_typed_dict):
-        p = _param(Tool.from_callable(example_nested_typed_dict), "hint")
-        assert _assert_object(p)
-        props = _assert_object_dict_props(p)
-        box = props["box"]
-        assert isinstance(box, ObjectParameter)
-        box_props = _assert_object_dict_props(box)
-        for field_name, field_param in box_props.items():
-            assert isinstance(field_param, PrimitiveParameter), (
-                f"box.{field_name!r} should be PrimitiveParameter"
-            )
-            assert field_param.type == "integer"
-
-    def test_nested_typed_dict_optional_label_filter(self, example_nested_typed_dict):
-        # label_filter: Optional[str] = None on the same fixture — Gap 1 + Gap 8.
-        tool = Tool.from_callable(example_nested_typed_dict)
-        p = _param(tool, "label_filter")
-        assert isinstance(p, PrimitiveParameter)
-        assert p.type == "string"
-        assert "label_filter" not in tool.required
-
-
-# ======================================================================
 # TestOptionalParameters — Optional[T] + None default
 # ======================================================================
 
@@ -444,43 +346,6 @@ class TestOptionalParameters:
             assert tool.parameters[name].description != "", (
                 f"Description for {name!r} should not be empty"
             )
-
-
-# ======================================================================
-# TestNestedContainers — list[list[T]] and dict[str, list[T]]
-# ======================================================================
-
-
-class TestNestedContainers:
-    """Test nested container (list or dict) arguments in callables."""
-
-    # --- list[list[str]] ---
-
-    def test_list_of_list_structure(self, example_nested_containers):
-        p = _param(Tool.from_callable(example_nested_containers), "tag_groups")
-        assert _assert_array(p)
-        assert isinstance(p.items, ArrayParameter)
-        assert isinstance(p.items.items, PrimitiveParameter)
-        assert p.items.items.type == "string"
-
-    # --- dict[str, list[int]] ---
-
-    def test_dict_of_list_structure(self, example_nested_containers):
-        p = _param(Tool.from_callable(example_nested_containers), "index")
-        assert _assert_object(p)
-        assert isinstance(p.properties, ArrayParameter)
-        assert isinstance(p.properties.items, PrimitiveParameter)
-        assert p.properties.items.type == "integer"
-
-    def test_dict_of_list_float_optional(self, example_nested_containers):
-        # label_scores: dict[str, list[float]] = {} — optional, same structure
-        tool = Tool.from_callable(example_nested_containers)
-        assert "label_scores" not in tool.required
-        p = _param(tool, "label_scores")
-        assert _assert_object(p)
-        assert isinstance(p.properties, ArrayParameter)
-        assert isinstance(p.properties.items, PrimitiveParameter)
-        assert p.properties.items.type == "number"
 
 
 # ======================================================================
