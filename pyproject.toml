@@ -25,10 +25,23 @@ build-backend = "uv_build"
 [dependency-groups]
 dev = [
     "pytest>=9.0.2",
+    "pytest-cov>=7.1.0",
     "ruff>=0.15.4",
     "ty>=0.0.29",
 ]
 examples = [
     "any-llm-sdk[all]>=1.13.0",
     "rich>=14.3.3",
+]
+
+[tool.pytest.ini_options]
+addopts = """--cov-report term-missing --cov src/atk -ra"""
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+exclude_lines = ["pragma: no cover", "raise NotImplementedError"]
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "^\\s*\\.\\.\\.\\s*$",  # Protocol / abstract method placeholders
 ]

@@ -9,3 +9,6 @@ wheels/
 # Virtual environment & setup
 .venv/
 uv.lock
+
+# Coverage information from pytest-cov
+.coverage

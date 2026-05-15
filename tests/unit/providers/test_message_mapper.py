@@ -337,6 +337,13 @@ class TestToMessagesErrors:
     """Test error handling for unsupported types."""
 
     @staticmethod
+    def test_unsupported_top_level_message_raises() -> None:
+        messages = [object()]
+
+        with pytest.raises(NotImplementedError, match="Unsupported message role"):
+            MessageMapper.to_messages("System", messages)  # ty: ignore[invalid-argument-type]
+
+    @staticmethod
     def test_invalid_content_part_in_assistant() -> None:
         """Pydantic rejects ToolResultPart in AssistantMessage content."""
         with pytest.raises(ValidationError):
